@@ -1,0 +1,62 @@
+services:
+  app:
+    image: ghcr.io/kings-data-quest/cloud-commitment-portfolio-optimizer:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    volumes:
+      - ccpo_objects:/app/.data/objects
+      - ccpo_reports:/app/.data/reports
+
+  worker:
+    image: ghcr.io/kings-data-quest/cloud-commitment-portfolio-optimizer:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["node", "dist/apps/worker/index.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ccpo_objects:/app/.data/objects
+      - ccpo_reports:/app/.data/reports
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ccpo
+      POSTGRES_USER: ccpo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ccpo -d ccpo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ccpo_postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ccpo_redis:/data
+
+volumes:
+  ccpo_postgres:
+  ccpo_redis:
+  ccpo_objects:
+  ccpo_reports:

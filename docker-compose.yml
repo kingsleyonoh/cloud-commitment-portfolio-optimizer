@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ccpo
+      POSTGRES_USER: ccpo
+      POSTGRES_PASSWORD: ccpo
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ccpo -d ccpo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ccpo_postgres_dev:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ccpo_redis_dev:/data
+
+volumes:
+  ccpo_postgres_dev:
+  ccpo_redis_dev:

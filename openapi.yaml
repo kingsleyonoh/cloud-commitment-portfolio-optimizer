@@ -1,0 +1,229 @@
+openapi: 3.1.0
+info:
+  title: Cloud Commitment Portfolio Optimizer API
+  version: 0.1.0
+  description: Tenant-scoped FinOps commitment optimizer API generated from PRD §8b.
+servers:
+  - url: http://localhost:8080
+security:
+  - ApiKeyAuth: []
+paths:
+  /api/tenants/register:
+    post:
+      summary: Register a self-hosted tenant when enabled.
+      security: []
+      responses: { '200': { description: Tenant and one-time API key } }
+  /tenants/me:
+    get:
+      summary: Return current tenant profile and feature flags.
+      responses: { '200': { description: Tenant profile } }
+  /api/users:
+    get:
+      summary: List users.
+      responses: { '200': { description: Paginated users } }
+    post:
+      summary: Create user.
+      responses: { '200': { description: User } }
+  /api/users/{id}:
+    patch:
+      summary: Update user or role.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: User } }
+  /api/api-keys/rotate:
+    post:
+      summary: Rotate tenant API key.
+      responses: { '200': { description: New API key once } }
+  /api/cloud-accounts:
+    get:
+      summary: List cloud accounts.
+      responses: { '200': { description: Paginated cloud accounts } }
+    post:
+      summary: Create cloud account.
+      responses: { '200': { description: Cloud account } }
+  /api/cloud-accounts/{id}:
+    patch:
+      summary: Update cloud account.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Cloud account } }
+  /api/cloud-accounts/{id}/deactivate:
+    post:
+      summary: Deactivate cloud account.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Cloud account } }
+  /api/imports:
+    get:
+      summary: List import batches.
+      responses: { '200': { description: Paginated imports } }
+    post:
+      summary: Queue billing import.
+      responses: { '200': { description: Import batch } }
+  /api/imports/{id}:
+    get:
+      summary: Get import detail and warnings.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Import detail } }
+  /api/price-tables:
+    get:
+      summary: List price table versions.
+      responses: { '200': { description: Paginated price tables } }
+    post:
+      summary: Upload or create price table version.
+      responses: { '200': { description: Price table version } }
+  /api/price-tables/{id}/activate:
+    post:
+      summary: Activate price table version.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Active version } }
+  /api/forecast-models:
+    get:
+      summary: List forecast models.
+      responses: { '200': { description: Paginated forecast models } }
+    post:
+      summary: Create forecast model.
+      responses: { '200': { description: Forecast model } }
+  /api/forecast-runs:
+    get:
+      summary: List forecast runs.
+      responses: { '200': { description: Paginated forecast runs } }
+    post:
+      summary: Queue forecast run.
+      responses: { '200': { description: Forecast run } }
+  /api/forecast-runs/{id}:
+    get:
+      summary: Get forecast detail and metrics.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Forecast detail } }
+  /api/scenarios:
+    get:
+      summary: List scenarios.
+      responses: { '200': { description: Paginated scenarios } }
+    post:
+      summary: Create scenario.
+      responses: { '200': { description: Scenario } }
+  /api/scenarios/{id}:
+    get:
+      summary: Get scenario detail.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Scenario detail } }
+  /api/optimizer-policies:
+    get:
+      summary: List optimizer policies.
+      responses: { '200': { description: Paginated policies } }
+    post:
+      summary: Create optimizer policy.
+      responses: { '200': { description: Optimizer policy } }
+  /api/optimizer-policies/{id}:
+    patch:
+      summary: Update optimizer policy.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Optimizer policy } }
+  /api/optimizer-runs:
+    post:
+      summary: Queue optimizer run with frozen inputs.
+      responses: { '200': { description: Optimizer run } }
+  /api/optimizer-runs/{id}:
+    get:
+      summary: Get optimizer run and frontier summary.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Optimizer run } }
+  /api/recommendations:
+    get:
+      summary: List recommendations.
+      responses: { '200': { description: Paginated recommendations } }
+  /api/recommendations/{id}:
+    get:
+      summary: Get recommendation detail/report summary.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Recommendation detail } }
+  /api/recommendations/{id}/request-approval:
+    post:
+      summary: Request approval for recommendation.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Approval } }
+  /api/approvals:
+    get:
+      summary: List approvals.
+      responses: { '200': { description: Paginated approvals } }
+  /api/approvals/{id}:
+    get:
+      summary: Get approval detail.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Approval detail } }
+  /api/approvals/{id}/approve:
+    post:
+      summary: Approve approval request.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Approval and recommendation status } }
+  /api/approvals/{id}/reject:
+    post:
+      summary: Reject approval request.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Approval and recommendation status } }
+  /api/backtests:
+    get:
+      summary: List backtests.
+      responses: { '200': { description: Paginated backtests } }
+    post:
+      summary: Queue backtest run.
+      responses: { '200': { description: Backtest run } }
+  /api/backtests/{id}:
+    get:
+      summary: Get backtest metrics.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Backtest metrics } }
+  /api/reports/{source_type}/{source_id}:
+    get:
+      summary: Render or fetch frozen report snapshot.
+      parameters:
+        - { name: source_type, in: path, required: true, schema: { type: string } }
+        - { name: source_id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: Report snapshot } }
+  /api/audit-log:
+    get:
+      summary: List audit log entries.
+      responses: { '200': { description: Paginated audit rows } }
+  /api/integrations/status:
+    get:
+      summary: Get optional adapter status.
+      responses: { '200': { description: Adapter status } }
+  /api/integrations/test-event:
+    post:
+      summary: Send optional adapter test event.
+      responses: { '200': { description: Test result } }
+  /api/notifications:
+    get:
+      summary: List in-app notifications.
+      responses: { '200': { description: Paginated notifications } }
+  /api/notifications/{id}/read:
+    post:
+      summary: Mark notification read.
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Marked notification } }
+  /api/settings/notifications:
+    get:
+      summary: Get notification preferences.
+      responses: { '200': { description: Preferences } }
+    put:
+      summary: Save notification preferences.
+      responses: { '200': { description: Saved preferences } }
+  /health:
+    get:
+      summary: Process health.
+      security: []
+      responses: { '200': { description: Healthy } }
+  /health/db:
+    get:
+      summary: Database health.
+      security: []
+      responses: { '200': { description: DB reachable } }
+  /health/ready:
+    get:
+      summary: Readiness health.
+      security: []
+      responses: { '200': { description: Ready } }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
