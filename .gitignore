@@ -9,6 +9,8 @@ build/
 coverage/
 .zig-cache/
 zig-out/
+.playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Runtime data and local storage
@@ -95,3 +97,8 @@ AGENTS.md
 .claude/shell-snapshots/
 .claude/todos/
 .claude/statsig/
+
+# Klevar local operational tooling — managed by /refresh and never app source
+.yolo/runtime-candidate-revalidations/
+.yolo/logs/
+.yolo/command-runs/

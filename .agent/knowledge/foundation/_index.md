@@ -6,6 +6,7 @@
 
 | File | Summary |
 |------|---------|
+| `core-config-loading.md` | Typed PRD §14 environment configuration boundary for API, worker, scripts, and future shared modules. |
 | `EXAMPLE.md` | Template showing the expected shape — delete once a real foundation primitive exists. |
 
 ## What belongs here

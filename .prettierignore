@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+coverage/
+.zig-cache/
+zig-out/
+.playwright-report/
+test-results/
+.data/
+.tmp/
+
+# Klevar/project coordination markdown is maintained by template workflows.
+.agent/
+.yolo/
+.klevar/
+.pi/
+docs/
+
+# Large/static project metadata not owned by app formatting.
+LICENSE
+llms.txt
+mcp.json
+openapi.yaml
+PRODUCT.md
+DESIGN.md
+docker-compose.prod.yml
