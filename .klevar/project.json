@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "initializedAt": "2026-07-09T00:00:00.000Z",
+  "managedBy": "@klevar/pi",
+  "projectName": "Cloud Commitment Portfolio Optimizer",
+  "mode": "greenfield",
+  "prd": "docs/cloud-commitment-portfolio-optimizer_prd.md",
+  "defaultBranch": "main",
+  "devBranch": "dev"
+}
