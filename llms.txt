@@ -1,0 +1,36 @@
+# Cloud Commitment Portfolio Optimizer
+
+> AI-readable project summary generated during Klevar bootstrap.
+
+## Problem
+
+FinOps leaders overbuy or avoid cloud commitments because spreadsheets optimize headline savings rather than downside risk. This project treats AWS/Azure/GCP commitments like a portfolio with uncertainty, liquidity lock-in, frozen price tables, replayable forecasts, approval control, and deterministic backtests.
+
+## Users
+
+CFOs, CTOs, Heads of FinOps, FinOps analysts, finance approvers, and read-only auditors at SaaS companies with significant cloud spend.
+
+## Architecture
+
+- TypeScript 5 Fastify API and HTMX/Tailwind server-rendered UI.
+- Zig 0.14 optimizer/replay workers for deterministic integer-cent economic calculations.
+- PostgreSQL 16 tenant-scoped operational store, Redis 7 queues/cache, DuckDB + Arrow/Parquet for analytical import/replay.
+- Optional Notification Hub and Workflow Engine adapters; Invoice Reconciliation is a disabled future placeholder until contract verification.
+
+## API Surface
+
+OpenAPI stubs live in `openapi.yaml`. Major groups: tenants/users/API keys, cloud accounts, imports, price tables, forecasts, scenarios, optimizer policies/runs, recommendations, approvals, backtests, reports, audit log, integrations, notifications, settings, health.
+
+## Install and Run
+
+- Install: `npm install`
+- Start dependencies: `docker compose up -d postgres redis`
+- Migrate: `npm run db:migrate`
+- Setup: `npm run setup`
+- Dev server: `npm run dev`
+- Worker: `npm run worker:dev`
+- Tests: `npm run test && zig build test && npm run test:integration && npm run test:e2e`
+
+## Repository
+
+Origin is resolved by git remote; expected private GitHub repo: `https://github.com/kingsleyonoh/cloud-commitment-portfolio-optimizer`.

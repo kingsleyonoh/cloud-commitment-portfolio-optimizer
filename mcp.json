@@ -1,0 +1,41 @@
+{
+  "name": "cloud-commitment-portfolio-optimizer",
+  "description": "Tenant-scoped FinOps decision system that imports cloud billing exports and price tables, forecasts eligible usage, simulates risk-bounded commitment portfolios, and produces auditable buy/no-action recommendations with deterministic backtests.",
+  "tools": [
+    {
+      "name": "registerTenant",
+      "method": "POST",
+      "path": "/api/tenants/register"
+    },
+    {
+      "name": "createImport",
+      "method": "POST",
+      "path": "/api/imports"
+    },
+    {
+      "name": "runForecast",
+      "method": "POST",
+      "path": "/api/forecast-runs"
+    },
+    {
+      "name": "runOptimizer",
+      "method": "POST",
+      "path": "/api/optimizer-runs"
+    },
+    {
+      "name": "requestApproval",
+      "method": "POST",
+      "path": "/api/recommendations/{id}/request-approval"
+    },
+    {
+      "name": "runBacktest",
+      "method": "POST",
+      "path": "/api/backtests"
+    },
+    {
+      "name": "getReport",
+      "method": "GET",
+      "path": "/api/reports/{source_type}/{source_id}"
+    }
+  ]
+}

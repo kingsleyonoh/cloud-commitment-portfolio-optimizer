@@ -1,0 +1,307 @@
+openapi: 3.1.0
+info:
+  title: Cloud Commitment Portfolio Optimizer API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/tenants/register:
+    post:
+      summary: Register tenant
+      responses:
+        "200":
+          description: TODO define response schema
+  /tenants/me:
+    get:
+      summary: Current tenant profile
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/users:
+    get:
+      summary: List users
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/users:
+    post:
+      summary: Create user
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/users/{id}:
+    patch:
+      summary: Update user
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/api-keys/rotate:
+    post:
+      summary: Rotate API key
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/cloud-accounts:
+    post:
+      summary: Create cloud account
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/cloud-accounts:
+    get:
+      summary: List cloud accounts
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/cloud-accounts/{id}:
+    patch:
+      summary: Update cloud account
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/cloud-accounts/{id}/deactivate:
+    post:
+      summary: Deactivate cloud account
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/imports:
+    post:
+      summary: Create import
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/imports:
+    get:
+      summary: List imports
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/imports/{id}:
+    get:
+      summary: Get import
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/price-tables:
+    post:
+      summary: Create price table
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/price-tables/{id}/activate:
+    post:
+      summary: Activate price table
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/price-tables:
+    get:
+      summary: List price tables
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/forecast-models:
+    get:
+      summary: List forecast models
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/forecast-models:
+    post:
+      summary: Create forecast model
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/forecast-runs:
+    get:
+      summary: List forecast runs
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/forecast-runs:
+    post:
+      summary: Create forecast run
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/forecast-runs/{id}:
+    get:
+      summary: Get forecast run
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/scenarios:
+    get:
+      summary: List scenarios
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/scenarios:
+    post:
+      summary: Create scenario
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/scenarios/{id}:
+    get:
+      summary: Get scenario
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/optimizer-policies:
+    get:
+      summary: List optimizer policies
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/optimizer-policies:
+    post:
+      summary: Create optimizer policy
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/optimizer-policies/{id}:
+    patch:
+      summary: Update optimizer policy
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/optimizer-runs:
+    post:
+      summary: Create optimizer run
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/optimizer-runs/{id}:
+    get:
+      summary: Get optimizer run
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/recommendations:
+    get:
+      summary: List recommendations
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/recommendations/{id}:
+    get:
+      summary: Get recommendation
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/recommendations/{id}/request-approval:
+    post:
+      summary: Request approval
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/approvals:
+    get:
+      summary: List approvals
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/approvals/{id}:
+    get:
+      summary: Get approval
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/approvals/{id}/approve:
+    post:
+      summary: Approve recommendation
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/approvals/{id}/reject:
+    post:
+      summary: Reject recommendation
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/backtests:
+    get:
+      summary: List backtests
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/backtests:
+    post:
+      summary: Create backtest
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/backtests/{id}:
+    get:
+      summary: Get backtest
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/reports/{source_type}/{source_id}:
+    get:
+      summary: Get report
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/audit-log:
+    get:
+      summary: List audit log
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/integrations/status:
+    get:
+      summary: Integration status
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/notifications:
+    get:
+      summary: List notifications
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/notifications/{id}/read:
+    post:
+      summary: Mark notification read
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/settings/notifications:
+    get:
+      summary: Get notification settings
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/settings/notifications:
+    put:
+      summary: Update notification settings
+      responses:
+        "200":
+          description: TODO define response schema
+  /api/integrations/test-event:
+    post:
+      summary: Send integration test event
+      responses:
+        "200":
+          description: TODO define response schema
+  /health:
+    get:
+      summary: Process health
+      responses:
+        "200":
+          description: TODO define response schema
+  /health/db:
+    get:
+      summary: Database health
+      responses:
+        "200":
+          description: TODO define response schema
+  /health/ready:
+    get:
+      summary: Readiness health
+      responses:
+        "200":
+          description: TODO define response schema
