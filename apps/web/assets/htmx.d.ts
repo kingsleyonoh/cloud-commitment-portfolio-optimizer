@@ -1,1 +1,0 @@
-declare module "htmx.org";
