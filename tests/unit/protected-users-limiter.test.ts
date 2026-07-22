@@ -65,6 +65,33 @@ describe("protected users rolling limiter", () => {
     });
   });
 
+  it("returns the ceiling remaining delay and admits at the exact window boundary", async () => {
+    let now = 1_000;
+    const limiter = createLocalProtectedUsersLimiter({ clock: () => now });
+    const admitPassword = () =>
+      limiter.admit(
+        context(),
+        "PUT",
+        "/api/users/{id}/credentials/password",
+        "44444444-4444-4444-8444-444444444444",
+      );
+    for (let count = 0; count < 5; count += 1) {
+      await expect(admitPassword()).resolves.toEqual({ allowed: true });
+    }
+    now += 1;
+    await expect(admitPassword()).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+    now += 1_000;
+    await expect(admitPassword()).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 59,
+    });
+    now = 61_000;
+    await expect(admitPassword()).resolves.toEqual({ allowed: true });
+  });
+
   it("admits exactly five selected-key rotations and denies the sixth", async () => {
     const limiter = createLocalProtectedUsersLimiter({ clock: () => 1_000 });
     for (let count = 0; count < 5; count += 1) {

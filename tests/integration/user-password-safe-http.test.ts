@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { afterEach, expect, it } from "vitest";
 
+import { createLocalProtectedUsersLimiter } from "../../core/tenant/protected-users-limiter.js";
 import {
   closeUsersHarness,
   createUsersHarness,
@@ -40,8 +41,13 @@ afterEach(async () => {
   await dropIsolatedDatabase(current?.database);
 });
 
-it("proves only safe 401, 403, 404, and 429 outcomes over an actual HTTP listener", async () => {
-  harness = await createUsersHarness("ccpo_password_safe_http", async () => "not-persisted");
+it("returns the safe remaining Retry-After delay over an actual HTTP listener", async () => {
+  let now = 1_000_000;
+  harness = await createUsersHarness(
+    "ccpo_password_safe_http",
+    async () => "not-persisted",
+    createLocalProtectedUsersLimiter({ clock: () => now }),
+  );
   const baseUrl = await harness.app.listen({ host: "127.0.0.1", port: 0 });
   const target = randomUUID();
   const admin = usersAuthorization(harness);
@@ -63,10 +69,11 @@ it("proves only safe 401, 403, 404, and 429 outcomes over an actual HTTP listene
       containsInput: false,
     });
   }
+  now += 2_001;
   expect(await request(baseUrl, target, admin)).toMatchObject({
     status: 429,
     code: "RATE_LIMITED",
-    retryAfter: "60",
+    retryAfter: "58",
     containsInput: false,
   });
 });
