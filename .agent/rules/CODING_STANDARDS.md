@@ -1,74 +1,6 @@
 # Cloud Commitment Portfolio Optimizer — Coding Standards
 
-> Part 1 of 5. Related rule files exist for meta, testing, live integration/E2E, and domain/security concerns. Load those files only when the task touches that surface.
-
-These rules are ALWAYS ACTIVE. Follow them on every response without being asked.
-
-## Workflow Pipeline Awareness
-- After completing ANY workflow, **read `.agent/workflows/PIPELINE.md`** and suggest the NEXT logical workflow based on the current context.
-- **PIPELINE.md is the single source of truth** for "what comes next." Individual workflows do NOT hardcode their next step — they defer to PIPELINE.md.
-- Never leave the user guessing what to do next. Always end with a clear next step.
-- **When creating a NEW workflow file**, ALWAYS add it to `PIPELINE.md` with its "When Done, Suggest" message.
-- **When deleting a workflow file**, ALWAYS remove it from `PIPELINE.md`.
-- `PIPELINE.md` must ALWAYS match the actual files in `.agent/workflows/`. If they're out of sync, fix `PIPELINE.md` immediately.
-
-## Workflow Approval Gates (CRITICAL — Prevents Plan Mode Errors)
-When a workflow step says "present to user", "wait for approval", or "approve before proceeding":
-1. Present the content directly as **formatted text in the conversation**.
-2. End with a clear question: `Approve? [yes / no / edit]`
-3. Wait for the user's response before proceeding to the next step.
-4. **NEVER call `ExitPlanMode` or `EnterPlanMode`** during workflow execution. These are Claude Code built-in tools for a separate system (toggled via `Shift+Tab`). Workflow approval gates are handled through direct conversation.
-5. **NEVER write to `.claude/plans/`** during workflow execution — that directory is reserved for Claude Code's built-in plan mode.
-
-This applies to ALL approval gates: batch selection, implementation plans, RED/GREEN/REGRESSION evidence, commit approval, refactor plans, and any other "present and wait" step in any workflow.
-
-## Domain-Specific Rules
-
-If your task touches any of the domains below, **also read the corresponding rules file before starting**. These files contain deeper conventions than fit here.
-
-| When working on... | Also read |
-|--------------------|-----------|
-| Authentication / sessions / permissions | `.agent/rules/auth_rules.md` (if exists) |
-| Database / migrations / queries | `.agent/rules/db_rules.md` (if exists) |
-| Background jobs / queues / scheduling | `.agent/rules/jobs_rules.md` (if exists) |
-| API endpoints / serializers / validation | `.agent/rules/api_rules.md` (if exists) |
-| UI / UX / frontend routes / templates / CSS / page copy / design tokens | `.agent/rules/FRONTEND_IMPECCABLE_RULES.md` |
-
-> These files are created by `/bootstrap` when a domain has 5+ concentrated conventions. If a file doesn't exist for a domain, the relevant rules are here in CODING_STANDARDS.md.
->
-> **When you create a new domain rules file or split an existing rules file:** update `.agent/rules/_index.md` with a new row. Pointer files at the project root (`CLAUDE.md`, `AGENTS.md`) reference the index — they do NOT list individual rules files. Adding a row to the index makes the new rule discoverable by every CLI without editing the pointer files.
-
-## Git Commit Convention
-
-**Format:** `type(scope): descriptive message`
-
-| Type | When to use |
-|------|------------|
-| `feat` | New feature or functionality |
-| `fix` | Bug fix |
-| `refactor` | Code restructuring without behavior change |
-| `test` | Adding or updating tests |
-| `docs` | Documentation changes |
-| `chore` | Tooling, workflows, config, dependencies |
-| `style` | Formatting, whitespace, no logic change |
-
-**Scope** = the module, app, or area affected (e.g., `pricing`, `auth`, `db`, `workflows`).
-
-**Rules:**
-- Subject line max 72 characters.
-- Use imperative mood: "add filter" not "added filter".
-- Reference the `[BUG]`/`[FIX]`/`[FEATURE]` from `progress.md` when applicable.
-- One commit per completed item. Don't bundle unrelated changes.
-
-**Examples:**
-```
-feat(pricing): implement UndercutBracket model with tenant FK
-fix(sending): guard against None accounts on sending page
-refactor(db): extract monitoring queries into dedicated mixin
-test(replies): add 11 tests for intent classification edge cases
-docs(context): update CODEBASE_CONTEXT.md with new schema tables
-chore(workflows): add sprint velocity to resume workflow
-```
+> Core AI discipline and file-size rules. Also loaded selectively: `CODING_STANDARDS_WORKFLOW.md`, `CODING_STANDARDS_META.md`, testing, live/E2E, security/domain rules.
 
 ## AI Discipline Rules (Prevent Common AI Failures)
 
@@ -96,7 +28,7 @@ chore(workflows): add sprint velocity to resume workflow
 - Template token fails to resolve? Schema field missing? Context API missing data? **STOP.** Either (1) extend the schema in this batch if PRD already specifies the field, or (2) escalate as `SILENT_WORKAROUND` and wait for user decision.
 - Banned pattern: literal tenant/customer identity strings (names, addresses, emails, registrations, legal boilerplate, wordmarks) written into templates, emails, invoices, legal docs, or any config-driven surface. Single-tenant fixtures mask this — it leaks in production.
 - **Also banned:** silently compacting/shrinking/truncating a file to hit a size limit (dropping bullets from a rules file, collapsing entries in a catalog, removing rows from a table to fit under 10K). The fix for an oversized knowledge file is the directory-per-kind pattern below, not truncation.
-- Applies manual + `/implement-next` + `/yolo`. See `yolo-honesty-checks.md` §8 for the full trigger table, rejected-pattern examples, and Option A/B/C routing.
+- Applies to manual work, `/implement-next`, ordinary AI/Mesh implementation, and the full-rights parent AI launched by Runtime v2. Evidence-backed AI review owns semantic enforcement; Runtime v2 does not.
 
 ### Append-Only Knowledge Files Banned (CRITICAL — Prevents Recurring Splits)
 - **NEVER create or grow a single file that accumulates entries of unbounded cardinality.** New gotcha → new file. New pattern → new file. New module → new file. New foundation primitive → new file. New build-journal batch → new file.
@@ -105,7 +37,7 @@ chore(workflows): add sprint velocity to resume workflow
   - `.agent/knowledge/gotchas/` — one file per gotcha (filename `YYYY-MM-DD-slug.md`)
   - `.agent/knowledge/modules/` — one file per module (filename mirrors source path)
   - `.agent/knowledge/foundation/` — one file per foundation primitive (filename `category-slug.md`)
-  - `.agent/knowledge/checks/` — one file per project-local enforcement check (filename `{failure_type}-{slug}.md`, lowercase hyphenated). Written by `yolo-subagent-reinforce` after recurring failures; read by implement sub-agent's Step 4 plan-validation; retire-able via `/audit-reinforcements`.
+  - `.agent/knowledge/checks/` — one file per project-local enforcement check (filename `{failure_type}-{slug}.md`, lowercase hyphenated). Written or reviewed by ordinary AI/Mesh workflows from path-backed recurrence evidence; consulted during implementation planning; retire-able via `/audit-reinforcements`.
   - `docs/build-journal/` — one file per batch (filename `NNN-batch.md`)
 - Each directory has an `_index.md` catalog that the AI rewrites when siblings are added, renamed, or removed. The index is a catalog, not a growing file — it tracks directory membership, nothing more.
 - **Exempt from this rule** (bounded cardinality, safe as single files): `CODING_STANDARDS*.md` (fixed taxonomy of rule categories), workflow stubs, `CODEBASE_CONTEXT.md` tech-stack / commands / env-vars tables, PRD sections.
@@ -122,7 +54,7 @@ chore(workflows): add sprint velocity to resume workflow
 - If you haven't read a file in this conversation, you don't know what's in it. Read it first.
 
 ### Hardcoded Secrets Banned (CRITICAL)
-NEVER write real API keys, tokens, passwords, JWTs, or signing secrets as string literals in any tracked file (including `.yolo/`). Read from env or vault. Pre-commit scanner: `scripts/scan-secrets.ps1`. Full rule + pattern catalogue + recovery flow → `CODING_STANDARDS_DOMAIN.md` § Secrets Management. YOLO-specific routing → `yolo-honesty-checks.md` Section 11.
+NEVER write real API keys, tokens, passwords, JWTs, or signing secrets as string literals in any tracked file (including `.yolo/`). Read from env or vault. Pre-commit scanner: `scripts/scan-secrets.ps1`. Full rule, pattern catalogue, and recovery flow → `CODING_STANDARDS_DOMAIN.md` § Secrets Management. Runtime v2 does not inspect or semantically accept secret-scan results; the responsible AI/user does.
 
 ### Respect .gitignore (CRITICAL — Prevents Accidental Exposure)
 - **NEVER run `git add -f` on ANY file.** If a file is gitignored, it is gitignored ON PURPOSE.
@@ -157,6 +89,8 @@ NEVER write real API keys, tokens, passwords, JWTs, or signing secrets as string
 - When in doubt, **ASK the user**: "I can't find X — does it exist, or should I create it?"
 
 ## File Size Limits
-- **Max 800 lines** per source file. If approaching 700, plan to split.
-- **Max 50 lines** per function/method.
-- **Max 200 lines** per class.
+- **Max 250 lines** per source file. If approaching the limit, split by responsibility before adding more behavior.
+- **Max 40 lines** per function/method.
+- **Max 180 lines** per class.
+
+These are the canonical general limits used by `/check-modularity` and `CODING_STANDARDS_DOMAIN.md`. Surface-specific rules may be stricter (for example the 10-line test-helper rule), never looser.

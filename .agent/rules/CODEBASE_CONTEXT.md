@@ -1,9 +1,9 @@
 # Cloud Commitment Portfolio Optimizer — Codebase Context
 
-Last updated: 2026-07-09
-Template synced: 2026-07-09
+Last updated: 2026-07-22
+Template synced: 2026-07-14
 PRD: `docs/cloud-commitment-portfolio-optimizer_prd.md`
-Status: Greenfield bootstrap complete; implementation starts from `docs/progress.md` Phase 0.
+Status: Phase 0 is evidence-closed and Phase 1 is active. The standalone session API now includes local-password login, no-`kid` RS256 access-cookie issuance, stable-family refresh rotation/reuse revocation, logout, endpoint-specific cookie/Origin/Fetch/CSRF selection, and Redis abuse controls while preserving bearer/API-key contracts. `/login` HTML/HTMX and Phase 3 deployment/production readiness remain deferred.
 
 ## Tech Stack
 
@@ -19,76 +19,68 @@ Status: Greenfield bootstrap complete; implementation starts from `docs/progress
 
 ## Commands
 
-| Purpose | Command |
-|---|---|
-| Install dependencies | `npm install` |
-| Check Zig toolchain | `zig version` (must be 0.14) |
-| Start infra | `docker compose up -d postgres redis` |
-| Stop infra | `docker compose down` |
-| Check infra | `docker compose ps` |
-| Run migrations | `npm run db:migrate` |
-| First-run setup / seed | `npm run setup` |
-| Dev API/UI server | `npm run dev` |
-| Dev worker | `npm run worker:dev` |
-| Run tests | `npm run test && zig build test && npm run test:integration && npm run test:e2e` |
-| Run tests (unit only) | `npm run test` |
-| Run tests (integration only) | `npm run test:integration` |
-| Run E2E tests | `npm run test:e2e` |
-| Run Zig tests | `zig build test` |
-| Lint | `npm run lint` |
-| Build/typecheck | `npm run build` |
-| Golden fixtures | `npm run fixtures:golden` |
-| Benchmark | `npm run bench:optimizer` |
+| Purpose | Command | Availability / owner |
+|---|---|---|
+| Install dependencies | `npm install` | Available now |
+| Check Zig toolchain | `zig version` (project pin: 0.14.1) | Available now |
+| Start infra | `docker compose up -d postgres redis` | Available now |
+| Stop infra | `docker compose down` | Available now |
+| Check infra | `docker compose ps` | Available now |
+| Run migrations | `npm run db:migrate` | Phase 0 command shell available; canonical migrations are Phase 1-owned |
+| First-run setup / seed | `npm run setup` | Phase 0 command shell available; usable tenant/product seed is Phase 1-owned |
+| Setup/config tests | `npm run test:setup` | Available now |
+| Run tests (unit only) | `npm run test` | Available now |
+| Run tests (integration only) | `npm run test:integration` | Available now; requires owned local services |
+| Run E2E tests | `npm run test:e2e` | Available now; current fixture HTTP/browser harness only |
+| Run Zig tests | `zig build test` | Available now; domain golden corpus remains Phase 1-owned |
+| Run full aggregate | `npm run test:all` | Available now; setup + unit + Zig + integration + E2E |
+| Typecheck | `npm run typecheck` | Available now |
+| Dev API/UI server | `npm run dev` | Planned — Phase 1 App/Infra Skeleton; script absent today |
+| Dev worker | `npm run worker:dev` | Planned — Phase 1 App/Infra Skeleton; script absent today |
+| Lint | `npm run lint` | Planned — Phase 1 App/Infra Skeleton; script absent today |
+| Format | `npm run format` | Planned — Phase 1 App/Infra Skeleton; script absent today |
+| Production build | `npm run build` | Planned — Phase 1 App/Infra Skeleton; script absent today |
+| Golden fixtures | `npm run fixtures:golden` | Planned — Phase 1 Zig economic-kernel slice; script absent today |
+| Benchmark | `npm run bench:optimizer` | Planned — Phase 3 performance hardening; script absent today |
 
 ## Project Structure
 
-| Path | Purpose |
-|---|---|
-| `apps/api/` | Fastify API, auth middleware, REST routes |
-| `apps/web/` | HTMX server-rendered UI templates/routes |
-| `apps/worker/` | Queue consumers invoking Zig optimizer/replay binaries |
-| `core/shared/` | `dbPool`, `jobQueue`, `objectStore`, `duckdbAnalytics`, logger, errors |
-| `core/tenant/` | Tenant context, RBAC policy, API key hashing |
-| `core/imports/` | Provider parsers and canonical usage normalization |
-| `core/pricing/` | Price table validation and instrument models |
-| `core/forecasting/` | Forecast models and scenario generation |
-| `core/optimizer/` | Zig optimizer source, solver bindings, efficient frontier logic |
-| `core/replay/` | Deterministic replay/backtest engine |
-| `core/approvals/` | Approval state machine and snapshots |
-| `core/reports/` | Strict report renderer and templates |
-| `core/notifications/` | In-app notifications and preferences |
-| `core/adapters/` | Optional Notification Hub, Workflow Engine, and disabled Invoice Recon adapters |
-| `db/migrations/` | Tenant-scoped PostgreSQL migrations |
-| `tests/` | Unit, integration, E2E, and golden fixtures |
-
-## Shared Foundation
-
-| Primitive | Planned path | Establishes |
+| Path | Purpose | State |
 |---|---|---|
-| Tenant context | `core/tenant/context.ts` | Resolves tenant_id, actor, role for API/job paths |
-| RBAC policy | `core/tenant/rbac.ts` | Explicit Roles × Resource Actions matrix cases |
-| DB pool/repository base | `core/shared/db.ts` | Tenant-leading query helpers and transactions |
-| Job queue | `core/shared/jobQueue.ts` | Redis queues, idempotency, worker shutdown |
-| Object store | `core/shared/objectStore.ts` | Local/S3-compatible artifact persistence |
-| DuckDB analytics | `core/shared/duckdbAnalytics.ts` | Analytical replay/import temp DB lifecycle |
-| Error responses | `core/shared/errors.ts` | PRD §8b error envelope and safe 401/403/404 behavior |
-| Report renderer | `core/reports/renderer.ts` | Strict templates and frozen snapshots |
-| Event adapter | `core/adapters/eventAdapter.ts` | Optional ecosystem event enqueue/retry boundaries |
+| `core/config/` | Typed Phase 0 configuration/deployment declarations | Current |
+| `core/db/` | Migration/setup command shell and deterministic SQL planning | Current; canonical migrations are Phase 1-owned |
+| `core/shared/` | `dbPool`, `jobQueue`, `objectStore`, `duckdbAnalytics`, logger, errors | Current Phase 0 foundation |
+| `tests/` | Setup, unit, integration, E2E harness, and fixtures | Current; product/golden coverage grows with owning phases |
+| `apps/api/` | Fastify API, auth middleware, REST routes | Planned — Phase 1 |
+| `apps/web/` | HTMX server-rendered UI templates/routes | Planned — Phase 1 |
+| `apps/worker/` | Queue consumers invoking Zig optimizer/replay binaries | Planned — Phase 1 |
+| `core/tenant/` | Tenant context, RBAC policy, API key hashing | Planned — Phase 1 |
+| `core/imports/` | Provider parsers and canonical usage normalization | Planned — Phase 1 |
+| `core/pricing/` | Price table validation and instrument models | Planned — Phase 1 |
+| `core/forecasting/` | Forecast models and scenario generation | Planned — Phase 1 |
+| `core/optimizer/` | Zig optimizer source, solver bindings, efficient frontier logic | Planned — Phase 1 |
+| `core/replay/` | Deterministic replay/backtest engine | Planned — Phase 2 |
+| `core/approvals/` | Approval state machine and snapshots | Planned — Phase 2 |
+| `core/reports/` | Strict report renderer and templates | Planned — Phase 1 |
+| `core/notifications/` | In-app notifications and preferences | Planned — Phase 2 |
+| `core/adapters/` | Optional Notification Hub, Workflow Engine, and disabled Invoice Recon adapters | Planned — Phase 2 |
+| `db/migrations/` | Tenant-scoped PostgreSQL migrations | Current through accepted forecast migrations `0014`/`0015` |
+
+## Knowledge Routing
+
+Unbounded project knowledge is directory-per-kind only; do not recreate flat module, foundation, pattern, gotcha, or build-journal tables here.
+
+| Kind | Canonical index |
+|---|---|
+| Current source modules | `.agent/knowledge/modules/_index.md` |
+| Shared foundation primitives | `.agent/knowledge/foundation/_index.md` |
+| Reusable project patterns | `.agent/knowledge/patterns/_index.md` |
+| Project-specific gotchas | `.agent/knowledge/gotchas/_index.md` |
+| Batch journals | `docs/build-journal/_index.md` |
 
 ## Tenant Model
 
-Tenant-scoped by default. API clients use `X-API-Key` hashed against `tenants.api_key_hash`; UI users use JWT with tenant claim. Every data-bearing table includes `tenant_id`; repository methods require tenant_id. Cross-tenant resource IDs return 404 or 403 per PRD §5.1 without leaking existence.
-
-## Key Modules
-
-- Tenant/auth/RBAC — tenant context, API keys, JWT, role/action matrix, audit logging.
-- Billing import/normalization — CSV/Parquet/JSON/native CUR parsing into canonical usage rows with quarantine on drift.
-- Price table/instrument modeling — versioned price fixtures, active version rules, frozen checksum references.
-- Forecast/scenario — usage distributions and quality metrics, not flattened averages.
-- Portfolio optimizer — Zig integer-cent economic kernel and risk-bounded efficient frontier.
-- Replay/backtest — deterministic historical decision replay with no future leakage.
-- Approvals/reports — immutable snapshots, strict templates, report/approval transition contract.
-- Notifications/adapters — local in-app canonical notifications and optional external mirrors/triggers.
+Tenant-scoped by default. `tenants` is a credential-free metadata ownership root; login identities live in the separate `users` child and hashed, revocable API credentials live in the accepted six-column `api_keys` child. The additive nine-column `registration_requests` table is the pre-tenant digest-only idempotency ledger; accepted migrations remain unchanged, and the ledger never stores raw registration keys/bodies, credentials/hashes, success responses, or client IPs. Public registration defaults off; production is double-gated and fails startup without a healthy shared atomic limiter or explicitly trusted enforcing edge/proxy allowlist. The first committed 201 may return plaintext once; later success replay is a non-secret 409 and never recovers/reissues it. Every API key resolves through an unrevoked-key/active-tenant join as a fixed deny-by-default `finops_analyst` actor with no user identity and only the explicit PRD §2b automation allow-list; it cannot administer users/keys/policies/settings/integrations, mutate price tables, deactivate accounts, read audit/approval queues, decide approvals, or elevate into an admin JWT. UI JWT claims are assertions only: RS256 verification is followed by an active user+tenant join and exact current database-role match before context is populated. Cookie-issued access JWTs add a stable family ID and session CSRF hash; opaque refresh rotation, replay revocation, inactivity, and logout serialize on the stable PostgreSQL family row. Tenant profiles expose neither users nor key material, all BIGINT/cents JSON uses unsigned canonical decimal strings without `Number` coercion, every data-bearing child table includes `tenant_id`, and cross-tenant resource IDs return a non-enumerating 404.
 
 ## External Integrations
 
@@ -101,39 +93,26 @@ Tenant-scoped by default. API clients use `X-API-Key` hashed against `tenants.ap
 
 ## Deep References
 
-| Surface | Planned path |
-|---|---|
-| API routes | `apps/api/routes/` |
-| HTMX views | `apps/web/views/` |
-| Workers | `apps/worker/` |
-| Tenant/RBAC | `core/tenant/` |
-| Imports | `core/imports/` |
-| Pricing | `core/pricing/` |
-| Forecasting | `core/forecasting/` |
-| Optimizer | `core/optimizer/` |
-| Reports/templates | `core/reports/` |
-| Notifications | `core/notifications/` |
-| Adapters | `core/adapters/` |
-| Migrations | `db/migrations/` |
-| Golden fixtures | `tests/fixtures/` |
-
-## Key Patterns & Conventions
-
-- Freeze economic identity before queued execution: forecast run, scenario, policy, provider/instrument, price table version IDs, random seed.
-- Amounts are integer cents; display percentages round half-up to 2 decimals and internal percentages to 4 decimals.
-- Use local services for integration tests; do not mock PostgreSQL/Redis/DuckDB paths under your control.
-- Optional adapters must fail open for core flow and record retry/disabled status in `ecosystem_events`.
-- Strict template rendering: missing report/notification token fails render and records an error; never silently fallback.
-
-## Gotchas Seeded from Template Knowledge
-
-| Stack | Gotcha |
-|---|---|
-| Node.js + TypeScript | Keep typecheck/build and runtime entrypoint wiring separate; prove routes/jobs are reachable through production registration. |
-| PostgreSQL | Tenant-leading composite indexes are required for every cross-tenant table and query path. |
-| Secrets | Env examples use names/placeholders only; scan before commits with `scripts/scan-secrets.sh`/`.ps1`. |
-| Test fabrication | Green claims require artifacts from real commands against local services, not mocked success output. |
+| Surface | Path | State |
+|---|---|---|
+| Current configuration module | `core/config/` | Phase 0 current; see `.agent/knowledge/modules/core-config.md` |
+| Current SQL command module | `core/db/` | Phase 0 current; see `.agent/knowledge/modules/core-db.md` |
+| Current shared primitives | `core/shared/` | Phase 0 current; see `.agent/knowledge/modules/core-shared.md` and the foundation index |
+| Current E2E harness | `tests/e2e/` | Phase 0 current; see `.agent/knowledge/modules/tests-e2e.md` |
+| API routes | `apps/api/routes/` | Planned — Phase 1 |
+| HTMX views | `apps/web/views/` | Planned — Phase 1 |
+| Workers | `apps/worker/` | Planned — Phase 1 |
+| Tenant/RBAC | `core/tenant/` | Planned — Phase 1 |
+| Imports | `core/imports/` | Planned — Phase 1 |
+| Pricing | `core/pricing/` | Planned — Phase 1 |
+| Forecasting | `core/forecasting/` | Planned — Phase 1 |
+| Optimizer | `core/optimizer/` | Planned — Phase 1 |
+| Reports/templates | `core/reports/` | Planned — Phase 1 |
+| Notifications | `core/notifications/` | Planned — Phase 2 |
+| Adapters | `core/adapters/` | Planned — Phase 2 |
+| Migrations | `db/migrations/` | Current additive product plan through `0015_create_forecast_runs.sql` |
+| Domain golden fixtures | `tests/fixtures/economic_kernel/` | Planned — Phase 1 |
 
 ## Environment Variables
 
-See `.env.example` for full names. Required local categories: app, database/queue, tenant management, import/pricing/forecast/optimizer, reports/approvals, optional integrations, observability.
+See `.env.example` for implemented config. Auth verification uses only `JWT_PUBLIC_KEY_PATH`; issuance separately loads `JWT_PRIVATE_KEY_PATH`, requires RSA ≥2048 and matching public SPKI, and emits exact no-`kid` RS256 headers. Production requires HTTPS `PUBLIC_BASE_URL`, `AUTH_LIMITER_MODE=redis`, `AUTH_COOKIE_SECURE=true`, and optional explicit immediate-proxy `AUTH_TRUSTED_PROXY_CIDRS`; loopback development/test may use unprefixed non-Secure cookies. Other categories: app, database/queue, tenant management, import/pricing/forecast/optimizer, reports/approvals, optional integrations, observability.

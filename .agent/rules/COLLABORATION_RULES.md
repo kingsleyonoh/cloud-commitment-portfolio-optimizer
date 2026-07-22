@@ -1,13 +1,12 @@
 # Collaboration Rules
 
-These rules apply when a Klevar project has external contributors, feature branches, or `docs/claims/*.json`. Legacy `/klevar-yolo parallel ...` usage is retired/excised historical context only.
+These rules apply when a Klevar project has external contributors, feature branches, or `docs/claims/*.json`. Legacy YOLO execution and runtime-owned branch/state conventions are retired and must not be recreated here.
 
 ## Operator Model
 
-A contributor may be a human using an AI coding tool. Treat these as operators:
+A contributor may be a human using Claude Code, Codex, Cursor, Pi, Mesh, or manual tools. Use ordinary contributor identities such as:
 
-- `operator:pi-yolo:*`
-- `contributor:<name>` using Claude Code, Codex, Cursor, Pi, or manual edits
+- `contributor:<name>`
 - `human-manual:<name>`
 
 ## Branch Protocol
@@ -15,10 +14,9 @@ A contributor may be a human using an AI coding tool. Treat these as operators:
 - `main` is production.
 - `dev` is the integration branch.
 - `feature/<slug>` is contributor work.
-- `yolo/batch-*` is runtime-owned work.
 - `hotfix/<slug>` is emergency production repair.
 
-Do not work directly on another operator's branch without explicit approval.
+Do not work directly on another operator's branch without explicit approval. Runtime v2 does not own a special branch namespace; an authorized AI or user chooses ordinary local Git mechanics under current project policy.
 
 ## Claims Protocol
 
@@ -45,34 +43,19 @@ Rules:
 - Mark claims `done` or `released` when finished or abandoned.
 - If no claims exist, solo Klevar flow remains unchanged.
 
+These collaboration claims coordinate humans and agents; they are not Runtime v2 acceptance packets, per-file read permits, or restrictions on unclaimed normal project access.
+
 ## AI Contributor Workflow
 
-1. Read `docs/progress.md`, this file, and project rules.
-2. Create/use a feature branch.
-3. Add a claim before editing.
+1. Read `docs/progress.md`, this file, and relevant project rules.
+2. Create or use the project-approved branch.
+3. Add a collaboration claim when parallel contributors require one.
 4. Use TDD and run the project regression command.
-5. Run secret scan before PR/commit.
-6. Open PR into `dev` with evidence.
+5. Run the secret scan before PR/commit when project policy requires it.
+6. Open a PR into `dev` with evidence when that is the selected collaboration flow.
 
-## Pi YOLO Behavior
+## Runtime v2 Boundary
 
-Pi YOLO must skip externally claimed tasks and avoid expected-file conflicts. Local parallel mode is allowed only when independence can be proven. If there is doubt, fall back to serial work or stop for operator decision.
+Runtime v2 must not interpret collaboration claims, branches, progress state, test output, or worktree state as semantic acceptance. It may report literal facts to a full-rights parent Pi or nested Mesh agent. AI decides how to coordinate with active contributors, subject to ordinary system, user, and project instructions.
 
-## Main-Agent Safety While YOLO Is Active
-
-When `.yolo/runtime-state.json` reports `running`, `failed`, or `paused` with a worktree, the chat/main agent is a read-only observer by default.
-
-Allowed without takeover:
-
-- Explain status, gates, logs, claims, changed files, and likely next actions.
-- Use Mesh/Agency status artifacts, fleet inspect/log tools, and read-only file inspection when historical state needs explanation.
-- Do not recommend `/klevar-yolo continue`, `/yolo-pause`, or `/yolo-clean batch-NNN`; those legacy runtime commands are retired/excised compatibility surfaces.
-
-Blocked unless the user explicitly asks to pause/take over/intervene:
-
-- Editing files inside the active YOLO worktree.
-- Editing files listed in active `docs/claims/*.json` claims.
-- Editing root-project files that overlap the active batch's changed/claimed files.
-- Cleaning/removing worktrees by hand instead of using runtime recovery commands.
-
-If the user wants manual intervention, preserve evidence first, explain that legacy pause/continue/clean commands are retired, and confirm whether any edits should target a preserved historical worktree or the root project.
+Legacy `.yolo/runtime-state.json`, `yolo/batch-*`, runtime claim skipping, and read-only-main-agent rules are historical conventions and are not active Runtime v2 authority. Use current Git status, collaboration claims, Mesh/Agency evidence, and explicit user instructions instead of reconstructing those conventions.

@@ -1,0 +1,229 @@
+import type { AddressInfo } from "node:net";
+import type { AppConfig } from "../../core/config/env.js";
+import { getEnvironmentConfig } from "../../core/config/env.js";
+import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
+import type { Logger } from "../../core/shared/logger.js";
+import { getLogger } from "../../core/shared/logger.js";
+import { createApiKeyMetadataRepository } from "../../core/tenant/api-key-metadata-repository.js";
+import { createApiKeyMetadataService } from "../../core/tenant/api-key-metadata-service.js";
+import { createApiKeyRotationRepository } from "../../core/tenant/api-key-rotation-repository.js";
+import { createApiKeyRotationService } from "../../core/tenant/api-key-rotation-service.js";
+import {
+  getRegistrationLimiter,
+  type RegistrationLimiter,
+  type RegistrationLimiterConfig,
+} from "../../core/tenant/registration-limiter.js";
+import { createTenantRegistrationService } from "../../core/tenant/registration-service.js";
+import { createTenantProfileRepository } from "../../core/tenant/profile-repository.js";
+import { createTenantProfileService } from "../../core/tenant/profile-service.js";
+import {
+  getProtectedUsersLimiter,
+  type ProtectedUsersLimiter,
+  type ProtectedUsersLimiterConfig,
+} from "../../core/tenant/protected-users-limiter.js";
+import { buildApp, type BuildAppOptions } from "./app.js";
+import {
+  closeAuthenticationRuntime,
+  createAuthenticationRuntime,
+} from "./authentication-runtime.js";
+import type { AuthenticationRuntime } from "./plugins/auth.js";
+import { createRuntimeCloser, type CloseableApplication, type ResourceName } from "./resources.js";
+import { createUsersRuntime } from "./users-runtime.js";
+
+export interface ApplicationInstance extends CloseableApplication {
+  listen(options: { host: string; port: number }): Promise<string>;
+  server: { address(): AddressInfo | string | null };
+}
+
+export interface RunningRuntime {
+  app: ApplicationInstance;
+  host: string;
+  port: number;
+  close(): Promise<void>;
+}
+
+export interface BootstrapOptions {
+  host?: string;
+  port?: number;
+  getConfig?: () => Promise<Readonly<AppConfig>>;
+  getLogger?: () => Promise<Logger>;
+  getDatabase?: (config: AppConfig["database"]) => Promise<DbPoolResource>;
+  createAuthentication?: (
+    config: Readonly<AppConfig>,
+    database: DbPoolResource,
+  ) => Promise<AuthenticationRuntime>;
+  createRegistrationLimiter?: (config: RegistrationLimiterConfig) => Promise<RegistrationLimiter>;
+  createUsersLimiter?: (config: ProtectedUsersLimiterConfig) => Promise<ProtectedUsersLimiter>;
+  buildApplication?: (options: BuildAppOptions) => ApplicationInstance;
+  createCloser?: (
+    app: CloseableApplication | undefined,
+    initialized: ReadonlySet<ResourceName>,
+  ) => () => Promise<void>;
+}
+
+export async function bootstrap(options: BootstrapOptions = {}): Promise<RunningRuntime> {
+  const initialized = new Set<ResourceName>();
+  let app: ApplicationInstance | undefined;
+  let authentication: AuthenticationRuntime | undefined;
+  let close: (() => Promise<void>) | undefined;
+  try {
+    const config = await (options.getConfig ?? getEnvironmentConfig)();
+    initialized.add("environment");
+    const logger = await (options.getLogger ?? getLogger)();
+    initialized.add("logger");
+    const database = await (options.getDatabase ?? getDbPool)(config.database);
+    initialized.add("database");
+    const registrationLimiter = await acquireRegistrationLimiter(config, options, initialized);
+    const usersLimiter = await acquireUsersLimiter(config, options, initialized);
+    authentication = await acquireAuthentication(config, database, options);
+    const appOptions = applicationOptions(
+      config,
+      logger,
+      database,
+      authentication,
+      registrationLimiter,
+      usersLimiter,
+    );
+    app = (options.buildApplication ?? buildApp)(appOptions);
+    close = (options.createCloser ?? createRuntimeCloser)(app, initialized);
+    const host = options.host ?? hostFor(config.runtime.nodeEnv);
+    const port = options.port ?? config.runtime.port;
+    await app.listen({ host, port });
+    const actualPort = listeningPort(app);
+    await logger.info("listening", { host, port: actualPort });
+    return { app, host, port: actualPort, close };
+  } catch (error) {
+    close ??= (options.createCloser ?? createRuntimeCloser)(app, initialized);
+    const closeUnboundAuth = app ? undefined : () => closeAuthenticationRuntime(authentication);
+    await closeAfterFailure(close, error, closeUnboundAuth);
+    throw error;
+  }
+}
+
+function acquireAuthentication(
+  config: Readonly<AppConfig>,
+  database: DbPoolResource,
+  options: BootstrapOptions,
+): Promise<AuthenticationRuntime> {
+  return (options.createAuthentication ?? createAuthenticationRuntime)(config, database);
+}
+
+async function acquireRegistrationLimiter(
+  config: Readonly<AppConfig>,
+  options: BootstrapOptions,
+  initialized: Set<ResourceName>,
+): Promise<RegistrationLimiter | undefined> {
+  if (!config.tenant?.selfRegistrationEnabled) return undefined;
+  const limiter = await (options.createRegistrationLimiter ?? getRegistrationLimiter)({
+    mode: config.tenant.registrationLimiterMode,
+    redisUrl: config.queue.url,
+  });
+  initialized.add("registrationLimiter");
+  return limiter;
+}
+
+async function acquireUsersLimiter(
+  config: Readonly<AppConfig>,
+  options: BootstrapOptions,
+  initialized: Set<ResourceName>,
+): Promise<ProtectedUsersLimiter> {
+  const mode = config.users?.limiterMode ?? "local";
+  const limiter = await (options.createUsersLimiter ?? getProtectedUsersLimiter)({
+    mode,
+    redisUrl: config.queue?.url ?? "redis://127.0.0.1:6379",
+  });
+  initialized.add("usersLimiter");
+  return limiter;
+}
+
+function applicationOptions(
+  config: Readonly<AppConfig>,
+  logger: Logger,
+  database: DbPoolResource,
+  authentication: AuthenticationRuntime,
+  limiter: RegistrationLimiter | undefined,
+  usersLimiter: ProtectedUsersLimiter,
+): BuildAppOptions {
+  return {
+    logger,
+    databaseProbe: () => database.health(),
+    databaseTimeoutMs: Math.min(config.database.pool.connectionTimeoutMillis, 5000),
+    authentication,
+    tenantProfile: {
+      service: createTenantProfileService(createTenantProfileRepository(database.pool)),
+    },
+    users: createUsersRuntime(
+      database,
+      logger,
+      usersLimiter,
+      config.auth,
+      authentication.sessions?.argonExecutor,
+    ),
+    apiKeys: {
+      limiter: usersLimiter,
+      service: createApiKeyMetadataService(createApiKeyMetadataRepository(database.pool)),
+    },
+    apiKeyRotation: {
+      limiter: usersLimiter,
+      service: createApiKeyRotationService(
+        createApiKeyRotationRepository(database.pool),
+        config.tenant?.apiKeyPrefix ?? "ccpo",
+      ),
+    },
+    ...(config.tenant?.registrationTrustedProxyCidrs
+      ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }
+      : {}),
+    ...registrationRuntime(config, database, limiter),
+  };
+}
+
+function registrationRuntime(
+  config: Readonly<AppConfig>,
+  database: DbPoolResource,
+  limiter: RegistrationLimiter | undefined,
+): Pick<BuildAppOptions, "tenantRegistration"> {
+  if (!limiter) return {};
+  return {
+    tenantRegistration: {
+      limiter,
+      service: createTenantRegistrationService(database.pool, config.tenant.apiKeyPrefix),
+    },
+  };
+}
+
+export { createAuthenticationRuntime };
+
+function hostFor(nodeEnv: AppConfig["runtime"]["nodeEnv"]): string {
+  return nodeEnv === "production" ? "0.0.0.0" : "127.0.0.1";
+}
+
+function listeningPort(app: ApplicationInstance): number {
+  const address = app.server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("The API server did not expose a TCP listening address.");
+  }
+  return address.port;
+}
+
+async function closeAfterFailure(
+  close: () => Promise<void>,
+  primary: unknown,
+  closeUnboundAuth?: () => Promise<void>,
+): Promise<void> {
+  const cleanupFailures: unknown[] = [];
+  try {
+    await closeUnboundAuth?.();
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  try {
+    await close();
+  } catch (error) {
+    cleanupFailures.push(error);
+  }
+  if (cleanupFailures.length > 0) {
+    throw new AggregateError([primary, ...cleanupFailures], "API startup and cleanup failed.", {
+      cause: primary,
+    });
+  }
+}

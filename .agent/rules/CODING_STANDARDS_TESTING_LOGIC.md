@@ -44,7 +44,7 @@ If the project is multi-tenant (PRD §2 Architecture Principles mandates `tenant
 
 ## Test Modularity Rules
 1. **One test class per model/service** — never mix models in one class.
-2. **Max 800 lines per test file** — split if larger.
+2. **Max 250 lines per test file** — matches the canonical project file limit; split by fixture/helper/surface if larger.
 3. **`setUp` creates only what that class needs** — no global fixtures.
 4. **Tests are independent** — no shared state, no ordering dependency.
 5. **Any single test can run in isolation** — `python -m pytest tests/test_x.py::TestClass::test_method`.

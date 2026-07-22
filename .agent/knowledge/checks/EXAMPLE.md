@@ -1,6 +1,6 @@
 # Example Check — Delete Me
 
-> Template shape for a project-local check file. Delete this file once a real check is added by `yolo-subagent-reinforce`.
+> Template shape for a project-local check file. Delete this file once an evidence-backed AI/Mesh workflow adds a real check.
 >
 > Filename convention: `{failure_type}-{slug}.md` (lowercase, hyphenated). The `{failure_type}` matches the implement sub-agent's `failure_type` enum (`tests-wont-green`, `silent-workaround`, `regression-failure`, etc.). The `{slug}` is a 2-4 word descriptor of the specific pattern.
 

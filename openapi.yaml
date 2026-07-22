@@ -4,50 +4,1020 @@ info:
   version: 0.1.0
 servers:
   - url: http://localhost:8080
+components:
+  securitySchemes:
+    JwtBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    AnalystApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    AccessCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_access
+      description: Production HttpOnly RS256 access cookie. Loopback development/test uses ccpo_access.
+    RefreshCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_refresh
+      description: Production HttpOnly opaque refresh cookie. Loopback development/test uses ccpo_refresh.
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_csrf
+      description: Production readable session-bound CSRF cookie. Loopback development/test uses ccpo_csrf.
+  headers:
+    RequestId:
+      description: Server-generated request correlation identifier.
+      schema: { type: string }
+    NoStore:
+      description: Prevents storage of sensitive or tenant-scoped responses.
+      schema: { type: string, const: no-store }
+    RetryAfter:
+      description: Whole seconds before another attempt.
+      schema: { type: string, pattern: "^[1-9][0-9]*$" }
+    SetCookie:
+      description: Exact Secure/Strict/Path=/ host cookie in production or explicit non-Secure loopback variant. Values are never documented or logged.
+      schema: { type: string, writeOnly: true }
+  schemas:
+    TenantRegistrationAddress:
+      type: object
+      additionalProperties: false
+      properties:
+        line1: { type: string, maxLength: 200 }
+        line2: { type: string, maxLength: 200 }
+        locality: { type: string, maxLength: 100 }
+        region: { type: string, maxLength: 100 }
+        postal_code: { type: string, maxLength: 32 }
+        country_code: { type: string, pattern: "^[A-Za-z]{2}$" }
+    TenantRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 200 }
+        legal_name: { type: string, maxLength: 200 }
+        full_legal_name: { type: string, maxLength: 200 }
+        display_name: { type: string, maxLength: 200 }
+        address: { $ref: "#/components/schemas/TenantRegistrationAddress" }
+        registration:
+          type: object
+          maxProperties: 32
+          additionalProperties: { type: string, maxLength: 256 }
+        contact_email: { type: string, maxLength: 254 }
+        contact_phone: { type: string, maxLength: 64 }
+        support_url: { type: string, format: uri, maxLength: 2048 }
+        finance_owner_email: { type: string, maxLength: 254 }
+        wordmark: { type: string, maxLength: 256 }
+        default_currency: { type: string, pattern: "^[A-Za-z]{3}$" }
+        timezone: { type: string, maxLength: 64 }
+        risk_budget_cents:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)$"
+          x-maximum: "9223372036854775807"
+    TenantProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - legal_name
+        - full_legal_name
+        - display_name
+        - address
+        - registration
+        - contact_email
+        - contact_phone
+        - support_url
+        - finance_owner_email
+        - wordmark
+        - default_currency
+        - timezone
+        - risk_budget_cents
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        legal_name: { type: string }
+        full_legal_name: { type: string }
+        display_name: { type: string }
+        address: { $ref: "#/components/schemas/TenantRegistrationAddress" }
+        registration: { type: object, additionalProperties: { type: string } }
+        contact_email: { type: [string, "null"] }
+        contact_phone: { type: [string, "null"] }
+        support_url: { type: [string, "null"] }
+        finance_owner_email: { type: [string, "null"] }
+        wordmark: { type: [string, "null"] }
+        default_currency: { type: string, pattern: "^[A-Z]{3}$" }
+        timezone: { type: string }
+        risk_budget_cents:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)$"
+          x-maximum: "9223372036854775807"
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TenantRegistrationCreated:
+      type: object
+      additionalProperties: false
+      required: [tenant, apiKey]
+      properties:
+        tenant: { $ref: "#/components/schemas/TenantProfile" }
+        apiKey:
+          type: string
+          description: Plaintext analyst automation credential returned once after commit.
+    RegistrationError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  tenant_id: { type: string, format: uuid }
+                  api_key_id: { type: string, format: uuid }
+    TenantProfileError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    ApiKeyMetadata:
+      type: object
+      additionalProperties: false
+      required: [id, note, created_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        note: { type: [string, "null"] }
+        created_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+    ApiKeyMetadataListResponse:
+      type: object
+      additionalProperties: false
+      required: [api_keys, next_cursor]
+      properties:
+        api_keys:
+          type: array
+          items: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        next_cursor: { type: [string, "null"], maxLength: 512 }
+    ApiKeyMetadataError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    UserRole:
+      type: string
+      enum: [tenant_admin, finops_analyst, finance_approver, read_only_auditor]
+    TenantUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, name, role, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean }
+        created_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        updated_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+    UserListResponse:
+      type: object
+      additionalProperties: false
+      required: [users, next_cursor]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/TenantUser" }
+        next_cursor: { type: [string, "null"], maxLength: 512 }
+    UserCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [email, name, role]
+      properties:
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean, default: true }
+    UserPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_updated_at]
+      anyOf:
+        - required: [email]
+        - required: [name]
+        - required: [role]
+        - required: [is_active]
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean }
+    UserPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          writeOnly: true
+          description: Unicode password normalized to NFC without trimming or truncation; 15..128 scalars and at most 512 UTF-8 bytes.
+    UserError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    AuthLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, email, password]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        email: { type: string, maxLength: 254 }
+        password:
+          type: string
+          writeOnly: true
+          description: NFC-normalized without trim; 15..128 Unicode scalars and at most 512 UTF-8 bytes.
+    AuthSessionMetadata:
+      type: object
+      additionalProperties: false
+      required: [user_id, tenant_id, role, access_expires_at, refresh_idle_expires_at, refresh_absolute_expires_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/UserRole" }
+        access_expires_at: { type: string, format: date-time }
+        refresh_idle_expires_at: { type: string, format: date-time }
+        refresh_absolute_expires_at: { type: string, format: date-time }
+    AuthSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [session]
+      properties:
+        session: { $ref: "#/components/schemas/AuthSessionMetadata" }
+    AuthSessionError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    ApiKeyRotationRequest:
+      type: object
+      additionalProperties: false
+      required: [api_key_id]
+      properties:
+        api_key_id: { type: string, format: uuid }
+        note:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: NFC-normalized, already outer-trimmed, nonblank, and C0/C1-control-free replacement note.
+    ApiKeyRotationResponse:
+      type: object
+      additionalProperties: false
+      required: [revoked_api_key, replacement_api_key, audit_id, apiKey]
+      properties:
+        revoked_api_key: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        replacement_api_key: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        audit_id: { type: string, format: uuid }
+        apiKey:
+          type: string
+          writeOnly: true
+          description: One-time plaintext returned only after the atomic transaction commits.
+    ApiKeyRotationError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
 paths:
+  /api/auth/login:
+    post:
+      operationId: createBrowserSession
+      summary: Prove one tenant-local password and create a cookie-only session
+      description: Credential headers are forbidden; stale cookies are ignored. Redis atomically admits account and immediate-peer-derived IP buckets before exactly one bounded Argon2id verification.
+      security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthLoginRequest" }
+      responses:
+        "200":
+          description: Exact non-secret session metadata after family, root token, and audit commit; three cookie values are transport-only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSessionResponse" }
+        "400": { description: Closed JSON, media, password, or field validation failed., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Generic invalid proof or forbidden credential-header conflict., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin checks failed or valid proof found inactive user or tenant., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Encoded body exceeds 4096 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "429":
+          description: Atomic account or canonical-IP rolling bucket denied admission.
+          headers: { Retry-After: { $ref: "#/components/headers/RetryAfter" } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } }
+        "503": { description: Redis, Argon worker, PostgreSQL, audit, or signing dependency unavailable., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+  /api/auth/refresh:
+    post:
+      operationId: rotateBrowserSession
+      summary: Rotate the current opaque refresh token in its stable family
+      description: No decoded body or credential headers. The IP bucket runs before lookup and the confirmed-family bucket before the family-lock transaction. Routine success writes no audit.
+      security:
+        - RefreshCookie: []
+          CsrfCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      responses:
+        "200":
+          description: Exact non-secret session metadata after current-token use and one child commit; three rotated cookie values are transport-only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSessionResponse" }
+        "400": { description: A decoded non-empty body is forbidden., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Missing proof or generic malformed unknown expired used or revoked refresh., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin or CSRF failed or valid proof found inactive user or tenant., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Transport body exceeds 1024 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "429":
+          description: Canonical-IP or confirmed-family rolling bucket denied admission.
+          headers: { Retry-After: { $ref: "#/components/headers/RetryAfter" } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } }
+        "503": { description: Redis PostgreSQL audit or signing dependency unavailable., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+  /api/auth/logout:
+    post:
+      operationId: revokeBrowserSession
+      summary: Idempotently clear cookies and revoke a known stable family
+      description: No decoded body or credential headers. Missing malformed unknown or already-revoked refresh state remains audit-free 204; a known unrevoked family commits one logout audit before 204.
+      security:
+        - {}
+        - RefreshCookie: []
+          CsrfCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      responses:
+        "204":
+          description: Empty response after applicable transaction; all three exact cookies are cleared.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+        "400": { description: A decoded non-empty body is forbidden., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Credential headers conflict with the endpoint contract., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin or CSRF proof failed for a presented refresh cookie., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Transport body exceeds 1024 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "503": { description: PostgreSQL or audit dependency unavailable; server revocation is not claimed., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
   /api/tenants/register:
     post:
-      summary: Register tenant
+      operationId: registerTenant
+      summary: Register a tenant and issue its first analyst automation credential once
+      description: Disabled by default. Successful credentials cannot be replayed or recovered by this public route.
+      security: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: "^[!-~]+$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TenantRegistrationRequest" }
       responses:
-        "200":
-          description: TODO define response schema
+        "201":
+          description: Tenant created; the plaintext apiKey is returned on this response only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantRegistrationCreated" }
+        "400":
+          description: Strict request, media, JSON, header, or normalization validation failed.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "404":
+          description: Self-registration is disabled and the resource behaves as absent.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "409":
+          description: Idempotency request is in progress, non-replayable, reused, or terminal.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+              description: Present only for IDEMPOTENCY_IN_PROGRESS and always 1.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "413":
+          description: JSON request exceeds 16384 bytes.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "429":
+          description: Five attempts were already admitted for the canonical client IP in the rolling 60-second window.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "503":
+          description: The required PostgreSQL or shared limiter dependency is unavailable.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
   /tenants/me:
     get:
-      summary: Current tenant profile
+      operationId: getCurrentTenantProfile
+      summary: Current tenant metadata profile
+      description: Returns only the active tenant resolved by database-confirmed authentication context. Caller-supplied tenant identifiers are ignored.
+      x-required-action: tenant_profile.read
+      security:
+        - JwtBearer: []
+        - AnalystApiKey: []
+        - AccessCookie: []
       responses:
         "200":
-          description: TODO define response schema
+          description: Canonical metadata for the authenticated active tenant.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfile" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, stale, or otherwise invalid.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "403":
+          description: The authenticated actor lacks tenant_profile.read or its database-confirmed tenant/user is inactive.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "404":
+          description: The authenticated active tenant profile vanished before projection.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "503":
+          description: Authentication or tenant-profile PostgreSQL access is temporarily unavailable.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
   /api/users:
     get:
-      summary: List users
+      operationId: listTenantUsers
+      summary: List user identity and authorization metadata
+      description: Immutable created_at DESC and id DESC keyset pagination. The default is 25 and maximum is 100. A Tenant Admin JWT may make 60 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 512 }
+          description: Strict versioned opaque continuation boundary.
       responses:
         "200":
-          description: TODO define response schema
-  /api/users:
+          description: Exact seven-field metadata in immutable keyset order.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserListResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical limit, cursor, or unknown query member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Sixty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
     post:
-      summary: Create user
+      operationId: createTenantUser
+      summary: Create user identity and authorization metadata
+      description: Creates no credential, session, invitation, or access token. A Tenant Admin user credential may make 30 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreateRequest" }
       responses:
-        "200":
-          description: TODO define response schema
+        "201":
+          description: User identity and authorization metadata created.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUser" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical or open request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "409":
+          description: USER_CONFLICT for a normalized email conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Thirty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
   /api/users/{id}:
     patch:
-      summary: Update user
+      operationId: updateTenantUser
+      summary: Update user identity and authorization metadata
+      description: Requires the exact returned updated_at and at least one mutable field. The owning tenant is locked before the target row; no admitted transition may leave zero active tenant administrators. A Tenant Admin user credential may make 30 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserPatchRequest" }
       responses:
         "200":
-          description: TODO define response schema
+          description: Exact metadata after the database-managed version advances.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUser" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical path, version, or open request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "404":
+          description: USER_NOT_FOUND for both absent and cross-scope identifiers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "409":
+          description: USER_VERSION_CONFLICT, USER_CONFLICT, or LAST_TENANT_ADMIN_REQUIRED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Thirty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+  /api/users/{id}/credentials/password:
+    put:
+      operationId: provisionTenantUserPassword
+      summary: Provision or reset one tenant user's password credential
+      description: A database-confirmed Tenant Admin user credential may make five admitted requests per target in one rolling 60-second window. Hashing completes before the transaction; tenant, target, credential, target refresh-family revocation, and one secret-free transition audit commit atomically. User metadata and session credentials are never returned.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserPasswordRequest" }
+      responses:
+        "204":
+          description: Credential provision or reset committed with no response body.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "400":
+          description: VALIDATION_ERROR for wrong media, an open body, or invalid password shape.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "404":
+          description: Identical NOT_FOUND for absent and cross-tenant targets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "413":
+          description: PAYLOAD_TOO_LARGE when the encoded request exceeds 2048 bytes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Five requests were already admitted for this tenant, actor, target, and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Argon queue/worker, authentication, PostgreSQL, audit, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+  /api/api-keys:
+    get:
+      operationId: listTenantApiKeys
+      summary: List safe stored API-key metadata
+      description: Immutable created_at DESC and id DESC keyset pagination over the authenticated tenant only. The default is 25 and maximum is 100. A Tenant Admin JWT may make 60 admitted requests in one rolling 60-second window.
+      x-required-action: api_keys.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 512 }
+          description: Strict versioned opaque continuation boundary over exact microsecond timestamp and UUID values.
+      responses:
+        "200":
+          description: Exact four-field stored metadata with no tenant or credential material.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataListResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical limit, cursor, filter, or unknown query member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "403":
+          description: API-key actors and non-admin JWT roles are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "429":
+          description: Sixty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
   /api/api-keys/rotate:
     post:
-      summary: Rotate API key
+      operationId: rotateTenantApiKey
+      summary: Atomically revoke one selected API key and issue its replacement
+      description: A database-confirmed Tenant Admin user credential may submit five authorized, schema-valid requests per rolling 60 seconds. The selected same-tenant active row is locked, revoked, replaced, and audited in one transaction. The plaintext is serialized once only after commit; retrying an already committed old selection returns the same non-enumerating 404 and writes nothing.
+      x-required-action: api_keys.read_rotate
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApiKeyRotationRequest" }
       responses:
         "200":
-          description: TODO define response schema
+          description: Exact old/replacement metadata, durable audit row identifier, and one-time plaintext after commit.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical selected key, invalid note, or open body.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "404":
+          description: Identical NOT_FOUND for missing, revoked, cross-tenant, or concurrent-loser selections.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "413":
+          description: PAYLOAD_TOO_LARGE when the request exceeds 16384 bytes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "429":
+          description: Five requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "503":
+          description: Authentication, credential generation, PostgreSQL, audit, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
   /api/cloud-accounts:
     post:
       summary: Create cloud account
       responses:
         "200":
           description: TODO define response schema
-  /api/cloud-accounts:
     get:
       summary: List cloud accounts
       responses:
@@ -71,7 +1041,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/imports:
     get:
       summary: List imports
       responses:
@@ -89,15 +1058,14 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/price-tables/{id}/activate:
-    post:
-      summary: Activate price table
+    get:
+      summary: List price tables
       responses:
         "200":
           description: TODO define response schema
-  /api/price-tables:
-    get:
-      summary: List price tables
+  /api/price-tables/{id}/activate:
+    post:
+      summary: Activate price table
       responses:
         "200":
           description: TODO define response schema
@@ -107,7 +1075,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/forecast-models:
     post:
       summary: Create forecast model
       responses:
@@ -119,7 +1086,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/forecast-runs:
     post:
       summary: Create forecast run
       responses:
@@ -137,7 +1103,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/scenarios:
     post:
       summary: Create scenario
       responses:
@@ -155,7 +1120,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/optimizer-policies:
     post:
       summary: Create optimizer policy
       responses:
@@ -227,7 +1191,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/backtests:
     post:
       summary: Create backtest
       responses:
@@ -275,7 +1238,6 @@ paths:
       responses:
         "200":
           description: TODO define response schema
-  /api/settings/notifications:
     put:
       summary: Update notification settings
       responses:

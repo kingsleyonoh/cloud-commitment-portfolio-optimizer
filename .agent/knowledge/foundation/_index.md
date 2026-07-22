@@ -6,7 +6,14 @@
 
 | File | Summary |
 |------|---------|
-| `EXAMPLE.md` | Template showing the expected shape — delete once a real foundation primitive exists. |
+| `analytics-duckdb-lifecycle.md` | DuckDB manager/session ownership and explicit unavailable boundary. |
+| `config-deployment-region.md` | Typed immutable compute/database region parity. |
+| `core-error-normalization.md` | Stable safe error codes and exact client envelope. |
+| `core-managed-resource-cache.md` | Coalesced async initialization, retry, close, and reset. |
+| `db-pool-singleton.md` | Application `pg.Pool` ownership and migration-client separation. |
+| `jobs-queue-adapter.md` | Idempotent queue contract and disabled fail-closed boundary. |
+| `observability-structured-logger.md` | Structured context, recursive redaction, and sink lifecycle. |
+| `storage-object-store.md` | Traversal-safe atomic local filesystem object persistence. |
 
 ## What belongs here
 
@@ -19,7 +26,7 @@ Primitives imported by 3+ modules or that establish a project-wide contract. Exa
 ## How to add a new foundation primitive
 
 1. Filename pattern: `category-slug.md` (e.g. `core-config-loading.md`, `db-pool-singleton.md`, `plugin-auth.md`).
-2. Use the What it establishes / Files / When to read shape from `EXAMPLE.md`.
+2. Use the bounded `What it establishes` / `Files` / `When to read this` / `Contract` / `Cross-references` shape demonstrated by the existing sibling files.
 3. Add one row to the `## Catalog` table above.
 
 ## Why directory-per-kind

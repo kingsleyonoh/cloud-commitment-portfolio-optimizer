@@ -1,0 +1,95 @@
+const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] } as const;
+
+export const tenantRegistrationBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name"],
+  properties: {
+    name: { type: "string" },
+    legal_name: { type: "string" },
+    full_legal_name: { type: "string" },
+    display_name: { type: "string" },
+    address: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        line1: { type: "string" },
+        line2: { type: "string" },
+        locality: { type: "string" },
+        region: { type: "string" },
+        postal_code: { type: "string" },
+        country_code: { type: "string" },
+      },
+    },
+    registration: {
+      type: "object",
+      maxProperties: 32,
+      additionalProperties: { type: "string" },
+    },
+    contact_email: { type: "string" },
+    contact_phone: { type: "string" },
+    support_url: { type: "string" },
+    finance_owner_email: { type: "string" },
+    wordmark: { type: "string" },
+    default_currency: { type: "string" },
+    timezone: { type: "string" },
+    risk_budget_cents: { type: "string", pattern: "^(?:0|[1-9][0-9]*)$" },
+  },
+} as const;
+
+export const tenantProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "id",
+    "name",
+    "legal_name",
+    "full_legal_name",
+    "display_name",
+    "address",
+    "registration",
+    "contact_email",
+    "contact_phone",
+    "support_url",
+    "finance_owner_email",
+    "wordmark",
+    "default_currency",
+    "timezone",
+    "risk_budget_cents",
+    "is_active",
+    "created_at",
+    "updated_at",
+  ],
+  properties: {
+    id: { type: "string", format: "uuid" },
+    name: { type: "string" },
+    legal_name: { type: "string" },
+    full_legal_name: { type: "string" },
+    display_name: { type: "string" },
+    address: { type: "object", additionalProperties: { type: "string" } },
+    registration: { type: "object", additionalProperties: { type: "string" } },
+    contact_email: nullableString,
+    contact_phone: nullableString,
+    support_url: nullableString,
+    finance_owner_email: nullableString,
+    wordmark: nullableString,
+    default_currency: { type: "string" },
+    timezone: { type: "string" },
+    risk_budget_cents: { type: "string" },
+    is_active: { type: "boolean" },
+    created_at: { type: "string", format: "date-time" },
+    updated_at: { type: "string", format: "date-time" },
+  },
+} as const;
+
+export const tenantRegistrationResponseSchema = {
+  201: {
+    type: "object",
+    additionalProperties: false,
+    required: ["tenant", "apiKey"],
+    properties: {
+      tenant: tenantProfileSchema,
+      apiKey: { type: "string" },
+    },
+  },
+} as const;

@@ -15,7 +15,7 @@ Frontend work must use these project-root context files when present:
 - `PRODUCT.md` — product/register/users/personality/anti-references/design principles.
 - `DESIGN.md` — colors, typography, spacing/elevation, components, do/don't rules.
 
-If a frontend task starts and either file is missing, create a minimal starter from the PRD and existing UI before implementing the UI. Do not ask the user during YOLO unless the PRD lacks enough information to make a safe starter.
+If a frontend task starts and either file is missing, the responsible AI/Mesh implementation lane creates a minimal starter from the PRD and existing UI before implementation. If the PRD lacks enough information for a safe starter, stop for clarification rather than inventing product intent.
 
 ## Frontend Build Flow
 
@@ -29,15 +29,11 @@ For new UI features, follow the Impeccable `craft` shape:
 
 ## Frontend Audit Gate
 
-Every frontend batch must run the runtime's Impeccable detector gate. By default the runtime executes:
+Every frontend batch requires a fresh focused AI/Mesh review of changed, reachable frontend paths. The responsible lane must inspect source and browser evidence, run the project's available deterministic frontend checks, and save path-backed output in its mission artifacts or another declared project-local evidence directory.
 
-```bash
-npx --yes impeccable@latest detect --fast --json <changed-frontend-paths>
-```
+If the project intentionally adopts an Impeccable detector, pin its version in project configuration and record the exact command/version. Never fetch `latest` as an implicit semantic gate, never rely on a Runtime-owned result file, and never treat detector output as a substitute for AI review. If no pinned detector exists, perform the required source/browser audit directly and state that no detector was run.
 
-The detector output is written to `.yolo/gates/impeccable-detect-batch-NNN.json`. Detector findings are blocking unless project runtime config explicitly disables `frontend.failOnDetectorFindings`.
-
-Every frontend batch must also produce explicit Impeccable-style evidence in the result flags or report:
+Every frontend batch must also produce explicit Impeccable-style evidence in its report:
 
 - `FRONTEND_IMPECCABLE_AUDIT_PASS` — checked accessibility, performance, theming, responsive behavior, and anti-patterns.
 - `FRONTEND_IMPECCABLE_POLISH_PASS` — checked spacing, typography, color/contrast, interaction states, motion/reduced-motion, copy, and design-system token drift.
@@ -57,7 +53,7 @@ Treat these as hard failures for frontend batches:
 
 ## Product Quality Gate Evidence
 
-The runtime also runs a PRD-driven `quality` gate for frontend/UI work. It reads the PRD and only requires evidence for concerns the PRD actually names:
+The responsible AI/Mesh lane also runs a PRD-driven product-quality review for frontend/UI work. It reads the PRD and requires evidence only for concerns the PRD actually names:
 
 - If the PRD says mobile-first, mobile, touch, responsive, or small-screen: provide `MOBILE_VIEWPORT_PASS` or equivalent Playwright/component evidence for the critical mobile viewport flow.
 - If the PRD says offline, PWA, local-first, service worker, or Workbox: provide `OFFLINE_PWA_PASS` or equivalent evidence for the offline/PWA flow.
@@ -68,7 +64,7 @@ Backend-only batches are not burdened by this frontend quality gate; they remain
 
 ## Result Contract Expectations
 
-For any frontend-touching YOLO batch:
+For any frontend-touching implementation or audit batch:
 
 - Include `PRODUCT.md` and/or `DESIGN.md` in `filesChanged` if the batch had to create or update them.
 - Ensure `DESIGN.md` is product-specific, not generic. It must cover mobile/responsive behavior when relevant, accessibility/focus/contrast, loading/empty/error/offline/warning states, spacing/typography/density/hierarchy, component patterns, and anti-patterns.
@@ -76,4 +72,4 @@ For any frontend-touching YOLO batch:
 - Include browser or component/E2E evidence in `tests.e2e` when a reachable page/interaction changed.
 - Include `FRONTEND_IMPECCABLE_AUDIT_PASS` and `FRONTEND_IMPECCABLE_POLISH_PASS` in `flags` when no blocking issues remain.
 - Include PRD-driven product quality flags such as `MOBILE_VIEWPORT_PASS`, `OFFLINE_PWA_PASS`, `PRIVACY_MATRIX_PASS`, and `BUNDLE_DYNAMIC_IMPORT_AUDIT_PASS` when the PRD names those concerns and the batch touches the frontend surface.
-- If blocking P0/P1 findings remain, return `status: FAILURE` with `failureType: FRONTEND_IMPECCABLE_FINDINGS`.
+- If blocking P0/P1 findings remain, report failure with `failureType: FRONTEND_IMPECCABLE_FINDINGS`; Runtime v2 does not accept or waive that semantic result.

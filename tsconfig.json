@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "apps/**/*.ts",
+    "core/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "types/**/*.d.ts",
+    "*.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "coverage", "playwright-report", "test-results"]
+}

@@ -1,0 +1,14 @@
+.{
+    .name = .cloud_commitment_optimizer,
+    .version = "0.1.0",
+    .fingerprint = 0x1bd21a64e1b37420, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.14.1",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "core/optimizer/src",
+        "core/optimizer/tests",
+        "tests/fixtures/economic_kernel",
+    },
+}

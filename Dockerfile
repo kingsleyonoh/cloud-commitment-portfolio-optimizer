@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.7
+# TypeScript build/start and the Zig package artifact boundary are active.
+# Deployment readiness remains deferred to its separately owned work.
 
 FROM node:22-alpine AS node-deps
 WORKDIR /app
@@ -6,10 +8,16 @@ COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM alpine:3.20 AS zig
-ARG ZIG_VERSION=0.14.0
+ARG ZIG_VERSION=0.14.1
+ENV ZIG_ARCHIVE_SIZE=49086504
+ENV ZIG_SHA256=24aeeec8af16c381934a6cd7d95c807a8cb2cf7df9fa40d359aa884195c4716c
 RUN apk add --no-cache curl xz tar
 WORKDIR /tmp
-RUN curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o zig.tar.xz   && tar -xf zig.tar.xz   && mv "zig-linux-x86_64-${ZIG_VERSION}" /zig
+RUN curl --proto '=https' --tlsv1.2 -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o zig.tar.xz \
+  && test "$(wc -c < zig.tar.xz)" -eq "$ZIG_ARCHIVE_SIZE" \
+  && echo "$ZIG_SHA256  zig.tar.xz" | sha256sum -c - \
+  && tar -xf zig.tar.xz \
+  && mv "zig-x86_64-linux-${ZIG_VERSION}" /zig
 ENV PATH="/zig:${PATH}"
 
 FROM node:22-alpine AS build

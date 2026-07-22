@@ -1,0 +1,53 @@
+{
+  "name": "cloud-commitment-portfolio-optimizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tenant-scoped FinOps commitment portfolio optimizer",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10 <12"
+  },
+  "scripts": {
+    "check:toolchain": "node scripts/check-toolchain.mjs",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "setup": "tsx --env-file-if-exists=.env.local scripts/setup.ts",
+    "auth:provision-admin": "tsx --env-file-if-exists=.env.local scripts/auth-provision-admin.ts",
+    "dev": "tsx watch --env-file-if-exists=.env.local apps/api/server.ts",
+    "worker:dev": "tsx --env-file-if-exists=.env.local apps/worker/server.ts",
+    "lint": "eslint apps core scripts tests *.config.ts",
+    "format": "prettier --write \"apps/**/*.ts\" \"core/**/*.ts\" \"scripts/**/*.{ts,mjs}\" \"tests/**/*.{ts,mjs}\" \"*.config.ts\" \"eslint.config.js\" \"prettier.config.mjs\" \"package.json\" \"tsconfig*.json\"",
+    "format:check": "prettier --check \"apps/**/*.ts\" \"core/**/*.ts\" \"scripts/**/*.{ts,mjs}\" \"tests/**/*.{ts,mjs}\" \"*.config.ts\" \"eslint.config.js\" \"prettier.config.mjs\" \"package.json\" \"tsconfig*.json\"",
+    "fixtures:golden": "zig build -Doptimize=ReleaseSafe && node scripts/validate-economic-kernel-fixtures.mjs",
+    "build:clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run build:clean && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:setup": "tsx --test tests/setup/*.test.mjs",
+    "test:integration": "node scripts/run-integration-shards.mjs",
+    "test:e2e": "npm run build && playwright test",
+    "test:all": "npm run test:setup && npm run test && zig build test && npm run test:integration && npm run test:e2e",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.5",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.1",
+    "@fastify/jwt": "10.2.0",
+    "argon2": "0.44.0",
+    "fastify": "^5.10.0",
+    "ipaddr.js": "2.4.0",
+    "pg": "^8.22.0",
+    "redis": "6.1.0"
+  }
+}

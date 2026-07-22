@@ -12,8 +12,14 @@ coverage/
 zig-out/
 
 # Runtime data and local files
-.tmp/
-.data/
+.tmp/*
+!.tmp/duckdb/
+.tmp/duckdb/*
+!.tmp/duckdb/.gitkeep
+.data/*
+!.data/objects/
+.data/objects/*
+!.data/objects/.gitkeep
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -48,6 +54,8 @@ tools/klevar-yolo-runtime/
 tools/klevar-pi-package/
 .yolo/refresh/
 .yolo/runtime/
+.yolo/runtime-v2/
+.yolo/runs/
 .yolo/incidents/
 .yolo/runtime-candidate-revalidations/
 .yolo/worktrees/
@@ -62,6 +70,7 @@ tools/klevar-pi-package/
 .yolo/command-cache.json
 .pi/browser/
 .pi/agents/
+.pi/klevar-build/
 .pi/klevar-yolo-v2/
 
 # YOLO Mode workspace — audit trail / v2 handoff artifacts
