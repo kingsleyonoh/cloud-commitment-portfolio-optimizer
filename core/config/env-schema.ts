@@ -79,6 +79,8 @@ export const ENV_KEYS = [
 
 export const DEPLOYMENT_ENV_KEYS = ["POSTGRES_PASSWORD", "APP_PUBLIC_URL"] as const;
 
+export const TEST_ENV_KEYS = ["TEST_DATABASE_ADMIN_URL", "TEST_REDIS_URL"] as const;
+
 export type NodeEnvironment = "development" | "test" | "production";
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type ForecastMethod =

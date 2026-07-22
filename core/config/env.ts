@@ -26,6 +26,7 @@ import { parseUsersConfig } from "./users.js";
 export {
   DEPLOYMENT_ENV_KEYS,
   ENV_KEYS,
+  TEST_ENV_KEYS,
   EnvironmentValidationError,
   type AppConfig,
   type DatabaseConfig,

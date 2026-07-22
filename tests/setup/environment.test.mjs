@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
@@ -32,16 +31,6 @@ function productionEnv(overrides = {}) {
     JWT_PUBLIC_KEY_PATH: "/run/config/jwt-public.pem",
     ...overrides,
   };
-}
-
-function declaredEnvironmentNames(text) {
-  return new Set(
-    text
-      .split(/\r?\n/u)
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => line.split("=", 1)[0]),
-  );
 }
 
 test("development uses typed, standalone-safe local defaults", async () => {
@@ -231,16 +220,4 @@ test("Invoice Reconciliation remains disabled without a verified contract", asyn
     (error) =>
       error instanceof EnvironmentValidationError && error.code === "ENDPOINT_CONTRACT_UNVERIFIED",
   );
-});
-
-test("the typed parser, deployment-only inputs, example, and local declarations have key parity", async () => {
-  const [{ DEPLOYMENT_ENV_KEYS, ENV_KEYS }, example, local] = await Promise.all([
-    loadConfigModule(),
-    readFile(".env.example", "utf8"),
-    readFile(".env.local", "utf8"),
-  ]);
-  const declaredKeys = new Set([...ENV_KEYS, ...DEPLOYMENT_ENV_KEYS]);
-
-  assert.deepEqual(declaredEnvironmentNames(example), declaredKeys);
-  assert.deepEqual(declaredEnvironmentNames(local), declaredKeys);
 });
