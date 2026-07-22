@@ -17,19 +17,30 @@ let healthy: RunningServer;
 let unavailable: RunningServer;
 
 test.beforeAll(async () => {
+  test.setTimeout(35_000);
   const databaseUrl = process.env.TEST_DATABASE_ADMIN_URL;
   if (!databaseUrl) throw new Error("TEST_DATABASE_ADMIN_URL is required for health E2E.");
-  healthy = await startE2eServer({
-    target: "application",
-    environment: { DATABASE_URL: databaseUrl, DB_POOL_CONNECTION_TIMEOUT_MS: "2000" },
-  });
-  unavailable = await startE2eServer({
-    target: "application",
-    environment: {
-      DATABASE_URL: "postgresql://127.0.0.1:1/ccpo_unreachable",
-      DB_POOL_CONNECTION_TIMEOUT_MS: "250",
-    },
-  });
+  try {
+    healthy = await startE2eServer({
+      target: "application",
+      environment: { DATABASE_URL: databaseUrl, DB_POOL_CONNECTION_TIMEOUT_MS: "2000" },
+    });
+    unavailable = await startE2eServer({
+      target: "application",
+      environment: {
+        DATABASE_URL: "postgresql://127.0.0.1:1/ccpo_unreachable",
+        DB_POOL_CONNECTION_TIMEOUT_MS: "250",
+      },
+    });
+  } catch (error) {
+    if (!healthy) throw error;
+    try {
+      await healthy.stop();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Health E2E startup cleanup failed.");
+    }
+    throw error;
+  }
 });
 
 test.afterAll(async () => {

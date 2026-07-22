@@ -59,6 +59,12 @@ export function waitForExit(child: ChildProcess): Promise<ChildExit> {
   });
 }
 
+export function waitForChildError(child: ChildProcess): Promise<Error> {
+  return new Promise((resolve) => {
+    child.once("error", resolve);
+  });
+}
+
 export async function terminateExactChild(
   child: ChildProcess,
   exit: Promise<ChildExit>,
@@ -87,6 +93,19 @@ export function childFailure(
   const status =
     child.exitCode === null ? `signal ${child.signalCode ?? "unknown"}` : `code ${child.exitCode}`;
   return new ServerStartError(`${prefix} (${status})${formatOutput(output)}`, child.pid ?? null);
+}
+
+export function childErrorFailure(
+  prefix: string,
+  child: ChildProcess,
+  error: Error,
+  output: ChildOutput,
+): ServerStartError {
+  return new ServerStartError(
+    `${prefix}: ${error.message}${formatOutput(output)}`,
+    child.pid ?? null,
+    { cause: error },
+  );
 }
 
 export function formatOutput(output: ChildOutput): string {

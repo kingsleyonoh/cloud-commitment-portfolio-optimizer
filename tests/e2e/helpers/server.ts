@@ -4,9 +4,10 @@ import {
   isProcessRunning,
   spawnServer,
   terminateExactChild,
+  waitForChildError,
   waitForExit,
 } from "./server-process.js";
-import { waitForReadySignal, waitForTcpReadiness } from "./server-readiness.js";
+import { waitForHttpReadiness, waitForReadySignal } from "./server-readiness.js";
 import {
   type ChildExit,
   type ChildOutput,
@@ -35,8 +36,9 @@ export async function startE2eServer(options: StartServerOptions = {}): Promise<
   const child = spawnServer(target, port, options.mode ?? "ready", options.environment);
   const output = captureOutput(child);
   const exit = waitForExit(child);
+  const childError = waitForChildError(child);
   try {
-    return await startSpawnedServer(child, exit, output, timeoutMs, target);
+    return await startSpawnedServer(child, exit, childError, output, timeoutMs, target);
   } catch (error) {
     await cleanupFailedStart(child, exit, error, target);
     throw normalizeStartError(error, child.pid ?? null);
@@ -46,14 +48,15 @@ export async function startE2eServer(options: StartServerOptions = {}): Promise<
 async function startSpawnedServer(
   child: ChildProcess,
   exit: Promise<ChildExit>,
+  childError: Promise<Error>,
   output: ChildOutput,
   timeoutMs: number,
   target: ServerTarget,
 ): Promise<RunningServer> {
   const deadline = Date.now() + timeoutMs;
-  const ready = await waitForReadySignal(child, exit, output, timeoutMs);
+  const ready = await waitForReadySignal(child, exit, childError, output, timeoutMs);
   const url = `http://${ready.host}:${ready.port}`;
-  await waitForTcpReadiness(ready, child, exit, output, deadline);
+  await waitForHttpReadiness(ready, child, exit, childError, output, deadline);
   if (child.pid === undefined) {
     throw new ServerStartError("E2E server child has no process id", null);
   }

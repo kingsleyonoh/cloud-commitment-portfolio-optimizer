@@ -1,6 +1,5 @@
-import { createConnection } from "node:net";
 import type { ChildProcess } from "node:child_process";
-import { childFailure, formatOutput } from "./server-process.js";
+import { childErrorFailure, childFailure, formatOutput } from "./server-process.js";
 import {
   type ChildExit,
   type ChildOutput,
@@ -11,6 +10,7 @@ import {
 export async function waitForReadySignal(
   child: ChildProcess,
   exit: Promise<ChildExit>,
+  childError: Promise<Error>,
   output: ChildOutput,
   timeoutMs: number,
 ): Promise<ReadySignal> {
@@ -22,6 +22,14 @@ export async function waitForReadySignal(
       exit.then(() => {
         throw childFailure("E2E server exited before readiness", child, output);
       }),
+      childError.then((error) => {
+        throw childErrorFailure(
+          "E2E server failed to spawn before readiness",
+          child,
+          error,
+          output,
+        );
+      }),
       timeout,
     ]);
   } finally {
@@ -29,23 +37,39 @@ export async function waitForReadySignal(
   }
 }
 
-export async function waitForTcpReadiness(
+export async function waitForHttpReadiness(
   ready: ReadySignal,
   child: ChildProcess,
   exit: Promise<ChildExit>,
+  childError: Promise<Error>,
   output: ChildOutput,
   deadline: number,
 ): Promise<void> {
+  const url = `http://${ready.host}:${ready.port}/health`;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       await exit;
-      throw childFailure("E2E server exited during readiness probe", child, output);
+      throw childFailure("E2E server exited during health readiness probe", child, output);
     }
-    if (await canConnect(ready.host, ready.port, deadline)) return;
-    await delay(25);
+    const readyNow = await Promise.race([
+      probeHealth(url, deadline),
+      exit.then(() => {
+        throw childFailure("E2E server exited during health readiness probe", child, output);
+      }),
+      childError.then((error) => {
+        throw childErrorFailure(
+          "E2E server errored during health readiness probe",
+          child,
+          error,
+          output,
+        );
+      }),
+    ]);
+    if (readyNow) return;
+    await delay(Math.min(25, Math.max(0, deadline - Date.now())));
   }
   throw new ServerStartError(
-    `E2E server TCP readiness probe timed out${formatOutput(output)}`,
+    `E2E server health readiness probe timed out for ${url}${outputDetails(output)}`,
     child.pid ?? null,
   );
 }
@@ -93,7 +117,7 @@ function createReadyTimeout(
       () =>
         reject(
           new ServerStartError(
-            `E2E server did not become ready within ${timeoutMs}ms${formatOutput(output)}`,
+            `E2E server did not become ready within ${timeoutMs}ms (no readiness signal)${outputDetails(output)}`,
             child.pid ?? null,
           ),
         ),
@@ -103,18 +127,21 @@ function createReadyTimeout(
   return { timeout, cancel: () => timer && clearTimeout(timer) };
 }
 
-function canConnect(host: string, port: number, deadline: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host, port });
-    const finish = (ready: boolean): void => {
-      socket.destroy();
-      resolve(ready);
-    };
-    socket.setTimeout(Math.min(250, Math.max(1, deadline - Date.now())));
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-    socket.once("timeout", () => finish(false));
-  });
+async function probeHealth(url: string, deadline: number): Promise<boolean> {
+  const budgetMs = Math.min(250, Math.max(1, deadline - Date.now()));
+  try {
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(budgetMs),
+    });
+    await response.body?.cancel();
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function outputDetails(output: ChildOutput): string {
+  return formatOutput(output) || ": no child output captured";
 }
 
 function delay(milliseconds: number): Promise<void> {

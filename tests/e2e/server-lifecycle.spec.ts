@@ -79,6 +79,21 @@ test("propagates a pre-readiness child failure and reaps the exact child", async
   expect(isProcessRunning(startError.pid!)).toBe(false);
 });
 
+test("accepts a legitimately slow server within its explicit startup budget", async () => {
+  const startedAt = Date.now();
+  const server = await startE2eServer({
+    mode: "slow-ready",
+    startupTimeoutMs: 2_500,
+  });
+
+  try {
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(500);
+    expect((await fetch(`${server.url}/health`)).status).toBe(200);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("times out clearly when readiness never arrives and reaps the exact child", async () => {
   let failure: unknown;
   try {

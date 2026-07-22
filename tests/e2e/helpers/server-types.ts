@@ -1,4 +1,4 @@
-export type FixtureMode = "ready" | "exit-before-ready" | "never-ready";
+export type FixtureMode = "ready" | "slow-ready" | "exit-before-ready" | "never-ready";
 export type ServerTarget = "fixture" | "application";
 
 export interface StartServerOptions {
@@ -32,7 +32,7 @@ export interface ChildOutput {
   stderr: string;
 }
 
-export const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
+export const DEFAULT_STARTUP_TIMEOUT_MS = 15_000;
 export const STOP_TIMEOUT_MS = 2_000;
 
 export class ServerStartError extends Error {

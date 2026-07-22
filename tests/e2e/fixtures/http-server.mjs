@@ -24,11 +24,15 @@ if (mode === "exit-before-ready") {
   process.once("disconnect", stop);
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-} else if (mode === "ready") {
+} else if (mode === "ready" || mode === "slow-ready") {
+  let healthReady = mode === "ready";
+  let healthTimer;
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/health") {
-      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      response.end('{"status":"ready"}\n');
+      response.writeHead(healthReady ? 200 : 503, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(healthReady ? '{"status":"ready"}\n' : '{"status":"starting"}\n');
       return;
     }
 
@@ -64,20 +68,37 @@ if (mode === "exit-before-ready") {
     process.exitCode = 1;
     process.disconnect?.();
   });
-  server.listen(port, host, () => {
-    const address = server.address();
-    if (address === null || typeof address === "string") {
-      process.stderr.write("fixture server did not receive a TCP address\n");
-      process.exitCode = 1;
-      return;
-    }
-    process.stdout.write(`${JSON.stringify({ event: "listening", host, port: address.port })}\n`);
-  });
+  let listenTimer;
+  const listen = () => {
+    server.listen(port, host, () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        process.stderr.write("fixture server did not receive a TCP address\n");
+        process.exitCode = 1;
+        return;
+      }
+      process.stdout.write(`${JSON.stringify({ event: "listening", host, port: address.port })}\n`);
+      if (mode === "slow-ready") {
+        healthTimer = setTimeout(() => {
+          healthReady = true;
+        }, 300);
+      }
+    });
+  };
+  if (mode === "slow-ready") listenTimer = setTimeout(listen, 300);
+  else listen();
 
   let stopping = false;
   const stop = () => {
     if (stopping) return;
     stopping = true;
+    if (listenTimer) clearTimeout(listenTimer);
+    if (healthTimer) clearTimeout(healthTimer);
+    if (!server.listening) {
+      process.exitCode = 0;
+      disconnectIpc();
+      return;
+    }
     server.close((error) => {
       process.exitCode = error === undefined ? 0 : 1;
       disconnectIpc();
