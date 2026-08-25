@@ -35,6 +35,7 @@ const migrationFilenames = [
   "0017_create_optimizer_policies.sql",
   "0018_create_optimizer_runs.sql",
   "0019_create_recommendations.sql",
+  "0020_create_report_snapshots.sql",
 ] as const;
 const acceptedHashes = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -108,7 +109,7 @@ describe("production refresh schema migration runner and CLI", () => {
     }
   });
 
-  it("applies the current plan through 0019, re-applies unchanged, and CLI reports counts only", async () => {
+  it("applies the current plan through 0020, re-applies unchanged, and CLI reports counts only", async () => {
     const database = await freshDatabase("ccpo_refresh_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -119,7 +120,7 @@ describe("production refresh schema migration runner and CLI", () => {
     });
     expect(first).toEqual({ applied: [...migrationFilenames], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...migrationFilenames] });
-    expect(cli.stdout).toBe("Migrations complete: 0 applied, 19 unchanged.\n");
+    expect(cli.stdout).toBe("Migrations complete: 0 applied, 20 unchanged.\n");
     expect(cli.stderr).toBe("");
     expect(await schemaState(database.url)).toEqual({
       families: "auth_refresh_families",
@@ -136,7 +137,7 @@ describe("production refresh schema migration runner and CLI", () => {
       cwd: resolve("."),
       env: { ...process.env, DATABASE_URL: database.url },
     });
-    expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 20 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0007_create_auth_refresh_families.sql");
     expect(result.stdout).toContain("applied 0008_create_auth_refresh_tokens.sql");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");

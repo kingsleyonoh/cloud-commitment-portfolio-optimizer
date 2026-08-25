@@ -37,6 +37,7 @@ const migrations = [
   "0017_create_optimizer_policies.sql",
   "0018_create_optimizer_runs.sql",
   "0019_create_recommendations.sql",
+  "0020_create_report_snapshots.sql",
 ] as const;
 const acceptedHashes: Record<string, string> = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -101,7 +102,7 @@ describe("production usage line items migration runner and CLI", () => {
     expect(helper).not.toMatch(/\bNumber\s*\(/u);
   });
 
-  it("applies through 0019, re-applies unchanged, and reports zero rows", async () => {
+  it("applies through 0020, re-applies unchanged, and reports zero rows", async () => {
     const database = await fresh("ccpo_usage_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -116,7 +117,7 @@ describe("production usage line items migration runner and CLI", () => {
     await client.end();
     expect(first).toEqual({ applied: [...migrations], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...migrations] });
-    expect(cli.stdout).toBe("Migrations complete: 0 applied, 19 unchanged.\n");
+    expect(cli.stdout).toBe("Migrations complete: 0 applied, 20 unchanged.\n");
     expect(cli.stderr).toBe("");
     expect(count.rows[0]?.count).toBe("0");
   });
@@ -128,7 +129,7 @@ describe("production usage line items migration runner and CLI", () => {
       [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/db-migrate.ts")],
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
-    expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 20 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");
     expect(result.stderr).toBe("");
   });

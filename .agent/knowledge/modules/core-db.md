@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides deterministic SQL discovery, checksum/order validation, isolated PostgreSQL execution, and observable advisory-lock cleanup. The current ordered product plan is additive through `0019_create_recommendations.sql`; accepted `0001`–`0015` bytes remain immutable.
+Provides deterministic SQL discovery, checksum/order validation, isolated PostgreSQL execution, and observable advisory-lock cleanup. The current ordered product plan is additive through `0020_create_report_snapshots.sql`; accepted `0001`–`0019` bytes remain immutable.
 
 ## Key files
 
@@ -27,7 +27,8 @@ Provides deterministic SQL discovery, checksum/order validation, isolated Postgr
 - `scenarios` persist tenant-owned forecast shock definitions with draft/ready/archived freeze semantics.
 - `optimizer_policies` persist tenant risk/objective constraints with draft/active/archived freeze semantics.
 - `optimizer_runs` freeze tenant/provider/instrument, forecast/scenario/policy inputs, and active price-version identities before queueing optimizer work.
-- `recommendations` persist optimizer output economics, confidence/risk fields, report snapshots, and approval state without mutable economic identity.
+- `recommendations` persist optimizer output economics, confidence/risk fields, explanation metadata, and approval state without mutable economic identity.
+- `report_snapshots` persist immutable tenant-owned polymorphic source identity, bounded snapshot JSON, optional rendered artifact URIs, and queued/rendered/failed/archived lifecycle state.
 - Forecast APIs/workers, forecasting algorithms, and optimizer economics remain separately owned.
 
 ## Cross-references

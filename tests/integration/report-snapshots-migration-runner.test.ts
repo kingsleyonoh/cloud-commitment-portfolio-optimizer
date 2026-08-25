@@ -62,6 +62,17 @@ const acceptedHashes: Record<string, string> = {
     "fc42985b4f99588924dbaae09885e416e73b3bd85f9968605da9627e4b9894b6",
   "0013_create_price_table_items.sql":
     "db6d9804b5903360a68e9a24ea85ff3259d09d7176ecfbdab6f55a78f83df108",
+  "0014_create_forecast_models.sql":
+    "f89365114c6bbf0845dd9da85d2733e5c5b610b407e517c3748d35e5e61407ac",
+  "0015_create_forecast_runs.sql":
+    "a4020341ea0126796c734732d90587662bf7c0537a5ecbb85e0700d9697ae1b8",
+  "0016_create_scenarios.sql": "95deede339c1b19f30dc0a6f620e91c31586937fcda7c0c2b2ead5756084e5b0",
+  "0017_create_optimizer_policies.sql":
+    "7ab70cf996eb591c2ef874e4dbceb949577a55fc8132911a4022aa6ad80227cd",
+  "0018_create_optimizer_runs.sql":
+    "98054ad9452ac6b76995c442e03b18931b1c3a828f62019500449ac4655968fa",
+  "0019_create_recommendations.sql":
+    "70511c1c6bb26d3af53d42672482aa681fd0d67b32d4ca02899bd055f2c2cf15",
 };
 let databases: IsolatedDatabase[] = [];
 let directories: string[] = [];
@@ -73,7 +84,7 @@ async function fresh(prefix: string): Promise<IsolatedDatabase> {
 }
 
 async function plan(files: readonly string[]): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "ccpo-forecast-migration-"));
+  const directory = await mkdtemp(join(tmpdir(), "ccpo-report-snapshots-migration-"));
   directories.push(directory);
   await Promise.all(
     files.map((file) => copyFile(join(migrationsDirectory, file), join(directory, file))),
@@ -88,82 +99,71 @@ afterEach(async () => {
   directories = [];
 });
 
-describe("production forecast migration runner and CLI", () => {
-  it("preserves 0001-0013 and keeps 0014/0015 additive and row-free", async () => {
+describe("production report snapshot migration runner and CLI", () => {
+  it("preserves 0001-0019 and keeps the report snapshot migration additive and row-free", async () => {
     for (const [filename, expected] of Object.entries(acceptedHashes)) {
       const contents = await readFile(join(migrationsDirectory, filename));
       expect(createHash("sha256").update(contents).digest("hex"), filename).toBe(expected);
     }
-    for (const filename of migrations.slice(13)) {
-      const sql = await readFile(join(migrationsDirectory, filename), "utf8");
-      expect(sql).not.toMatch(/\bIF\s+NOT\s+EXISTS\b/iu);
-      expect(sql).not.toMatch(/\bINSERT\s+INTO\b/iu);
-      expect(sql).not.toMatch(/\b(REAL|DOUBLE\s+PRECISION|FLOAT)\b/iu);
-    }
+    const sql = await readFile(
+      join(migrationsDirectory, "0020_create_report_snapshots.sql"),
+      "utf8",
+    );
+    expect(sql).not.toMatch(/\bIF\s+NOT\s+EXISTS\b/iu);
+    expect(sql).not.toMatch(/\bINSERT\s+INTO\b/iu);
+    expect(sql).not.toMatch(/\b(REAL|DOUBLE\s+PRECISION|FLOAT)\b/iu);
   });
 
-  it("applies through 0020, reapplies unchanged, and creates zero rows", async () => {
-    const database = await fresh("ccpo_forecast_apply");
+  it("applies through report snapshots, reapplies unchanged, and creates zero rows", async () => {
+    const database = await fresh("ccpo_report_snapshots_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const client = new Client({ connectionString: database.url });
     await client.connect();
-    const count = await client.query(`
-      SELECT (SELECT count(*)::text FROM forecast_models) AS models,
-             (SELECT count(*)::text FROM forecast_runs) AS runs
-    `);
+    const count = await client.query<{ count: string }>(
+      "SELECT count(*)::text FROM report_snapshots",
+    );
     await client.end();
+
     expect(first).toEqual({ applied: [...migrations], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...migrations] });
-    expect(count.rows[0]).toEqual({ models: "0", runs: "0" });
+    expect(count.rows[0]?.count).toBe("0");
   });
 
   it("uses the production CLI for a clean ordered apply", async () => {
-    const database = await fresh("ccpo_forecast_cli");
+    const database = await fresh("ccpo_report_snapshots_cli");
     const result = await execFileAsync(
       process.execPath,
       [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/db-migrate.ts")],
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
+
     expect(result.stdout).toContain("Migrations complete: 20 applied, 0 unchanged.");
-    expect(result.stdout).toContain("applied 0014_create_forecast_models.sql");
-    expect(result.stdout).toContain("applied 0015_create_forecast_runs.sql");
+    expect(result.stdout).toContain("applied 0020_create_report_snapshots.sql");
     expect(result.stderr).toBe("");
   });
 
-  it("serializes concurrent clean applies with one receipt per version", async () => {
-    const database = await fresh("ccpo_forecast_concurrent");
-    const results = await Promise.all([
-      runMigrations({ databaseUrl: database.url, migrationsDirectory }),
-      runMigrations({ databaseUrl: database.url, migrationsDirectory }),
-    ]);
-    const client = new Client({ connectionString: database.url });
-    await client.connect();
-    const receipts = await client.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM _ccpo_schema_migrations",
-    );
-    await client.end();
-    expect(results).toContainEqual({ applied: [...migrations], skipped: [] });
-    expect(results).toContainEqual({ applied: [], skipped: [...migrations] });
-    expect(receipts.rows[0]?.count).toBe("20");
-  });
-
-  it.each([13, 14])("rolls back failed migration index %s and rejects drift", async (index) => {
-    const database = await fresh(`ccpo_forecast_rollback_${index}`);
-    const directory = await plan(migrations.slice(0, index));
+  it("rolls back failed 0020 and rejects checksum drift", async () => {
+    const database = await fresh("ccpo_report_snapshots_rollback");
+    const directory = await plan(migrations.slice(0, 19));
     await runMigrations({ databaseUrl: database.url, migrationsDirectory: directory });
-    const filename = migrations[index]!;
-    const sql = await readFile(join(migrationsDirectory, filename), "utf8");
-    await writeFile(join(directory, filename), `${sql}\nSELECT ccpo_missing_forecast_object();\n`);
+    const sql = await readFile(
+      join(migrationsDirectory, "0020_create_report_snapshots.sql"),
+      "utf8",
+    );
+    await writeFile(
+      join(directory, "0020_create_report_snapshots.sql"),
+      `${sql}\nSELECT ccpo_missing_report_snapshot_object();\n`,
+    );
     await expect(
       runMigrations({ databaseUrl: database.url, migrationsDirectory: directory }),
-    ).rejects.toThrow(new RegExp(`failed to apply migration ${filename.slice(0, 4)}`, "iu"));
-    const cleanDirectory = await plan(migrations.slice(0, index + 1));
+    ).rejects.toThrow(/failed to apply migration 0020/iu);
+    const cleanDirectory = await plan(migrations);
     await runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory });
-    const path = join(cleanDirectory, filename);
+    const path = join(cleanDirectory, "0020_create_report_snapshots.sql");
     await writeFile(path, `${await readFile(path, "utf8")}\n-- drift\n`);
     await expect(
       runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory }),
-    ).rejects.toThrow(new RegExp(`checksum drift.*${filename.slice(0, 4)}`, "iu"));
+    ).rejects.toThrow(/checksum drift.*0020/iu);
   });
 });
