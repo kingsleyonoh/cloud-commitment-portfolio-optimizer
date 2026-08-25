@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides deterministic SQL discovery, checksum/order validation, isolated PostgreSQL execution, and observable advisory-lock cleanup. The current ordered product plan is additive through `0015_create_forecast_runs.sql`; accepted `0001`–`0013` bytes remain immutable.
+Provides deterministic SQL discovery, checksum/order validation, isolated PostgreSQL execution, and observable advisory-lock cleanup. The current ordered product plan is additive through `0019_create_recommendations.sql`; accepted `0001`–`0015` bytes remain immutable.
 
 ## Key files
 
@@ -24,6 +24,10 @@ Provides deterministic SQL discovery, checksum/order validation, isolated Postgr
 - `price_table_items` are immutable same-tenant children, use exact BIGINT cent economics, and reject duplicate canonical dimensions within a version.
 - `forecast_models` persist tenant-owned canonical scopes/config with draft/active/archived freeze semantics.
 - `forecast_runs` persist deterministic windows/seeds plus completed output and quality metadata with terminal-row freeze semantics.
+- `scenarios` persist tenant-owned forecast shock definitions with draft/ready/archived freeze semantics.
+- `optimizer_policies` persist tenant risk/objective constraints with draft/active/archived freeze semantics.
+- `optimizer_runs` freeze tenant/provider/instrument, forecast/scenario/policy inputs, and active price-version identities before queueing optimizer work.
+- `recommendations` persist optimizer output economics, confidence/risk fields, report snapshots, and approval state without mutable economic identity.
 - Forecast APIs/workers, forecasting algorithms, and optimizer economics remain separately owned.
 
 ## Cross-references

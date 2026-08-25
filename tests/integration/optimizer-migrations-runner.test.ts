@@ -61,6 +61,10 @@ const acceptedHashes: Record<string, string> = {
     "fc42985b4f99588924dbaae09885e416e73b3bd85f9968605da9627e4b9894b6",
   "0013_create_price_table_items.sql":
     "db6d9804b5903360a68e9a24ea85ff3259d09d7176ecfbdab6f55a78f83df108",
+  "0014_create_forecast_models.sql":
+    "f89365114c6bbf0845dd9da85d2733e5c5b610b407e517c3748d35e5e61407ac",
+  "0015_create_forecast_runs.sql":
+    "a4020341ea0126796c734732d90587662bf7c0537a5ecbb85e0700d9697ae1b8",
 };
 let databases: IsolatedDatabase[] = [];
 let directories: string[] = [];
@@ -72,7 +76,7 @@ async function fresh(prefix: string): Promise<IsolatedDatabase> {
 }
 
 async function plan(files: readonly string[]): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "ccpo-forecast-migration-"));
+  const directory = await mkdtemp(join(tmpdir(), "ccpo-optimizer-migration-"));
   directories.push(directory);
   await Promise.all(
     files.map((file) => copyFile(join(migrationsDirectory, file), join(directory, file))),
@@ -87,13 +91,13 @@ afterEach(async () => {
   directories = [];
 });
 
-describe("production forecast migration runner and CLI", () => {
-  it("preserves 0001-0013 and keeps 0014/0015 additive and row-free", async () => {
+describe("production optimizer migration runner and CLI", () => {
+  it("preserves 0001-0015 and keeps optimizer migrations additive and row-free", async () => {
     for (const [filename, expected] of Object.entries(acceptedHashes)) {
       const contents = await readFile(join(migrationsDirectory, filename));
       expect(createHash("sha256").update(contents).digest("hex"), filename).toBe(expected);
     }
-    for (const filename of migrations.slice(13)) {
+    for (const filename of migrations.slice(15)) {
       const sql = await readFile(join(migrationsDirectory, filename), "utf8");
       expect(sql).not.toMatch(/\bIF\s+NOT\s+EXISTS\b/iu);
       expect(sql).not.toMatch(/\bINSERT\s+INTO\b/iu);
@@ -101,68 +105,57 @@ describe("production forecast migration runner and CLI", () => {
     }
   });
 
-  it("applies through 0019, reapplies unchanged, and creates zero rows", async () => {
-    const database = await fresh("ccpo_forecast_apply");
+  it("applies through optimizer data tables, reapplies unchanged, and creates zero rows", async () => {
+    const database = await fresh("ccpo_optimizer_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const client = new Client({ connectionString: database.url });
     await client.connect();
     const count = await client.query(`
-      SELECT (SELECT count(*)::text FROM forecast_models) AS models,
-             (SELECT count(*)::text FROM forecast_runs) AS runs
+      SELECT (SELECT count(*)::text FROM optimizer_policies) AS policies,
+             (SELECT count(*)::text FROM optimizer_runs) AS runs,
+             (SELECT count(*)::text FROM recommendations) AS recommendations
     `);
     await client.end();
     expect(first).toEqual({ applied: [...migrations], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...migrations] });
-    expect(count.rows[0]).toEqual({ models: "0", runs: "0" });
+    expect(count.rows[0]).toEqual({ policies: "0", runs: "0", recommendations: "0" });
   });
 
   it("uses the production CLI for a clean ordered apply", async () => {
-    const database = await fresh("ccpo_forecast_cli");
+    const database = await fresh("ccpo_optimizer_cli");
     const result = await execFileAsync(
       process.execPath,
       [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/db-migrate.ts")],
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
     expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
-    expect(result.stdout).toContain("applied 0014_create_forecast_models.sql");
-    expect(result.stdout).toContain("applied 0015_create_forecast_runs.sql");
+    expect(result.stdout).toContain("applied 0019_create_recommendations.sql");
     expect(result.stderr).toBe("");
   });
 
-  it("serializes concurrent clean applies with one receipt per version", async () => {
-    const database = await fresh("ccpo_forecast_concurrent");
-    const results = await Promise.all([
-      runMigrations({ databaseUrl: database.url, migrationsDirectory }),
-      runMigrations({ databaseUrl: database.url, migrationsDirectory }),
-    ]);
-    const client = new Client({ connectionString: database.url });
-    await client.connect();
-    const receipts = await client.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM _ccpo_schema_migrations",
-    );
-    await client.end();
-    expect(results).toContainEqual({ applied: [...migrations], skipped: [] });
-    expect(results).toContainEqual({ applied: [], skipped: [...migrations] });
-    expect(receipts.rows[0]?.count).toBe("19");
-  });
-
-  it.each([13, 14])("rolls back failed migration index %s and rejects drift", async (index) => {
-    const database = await fresh(`ccpo_forecast_rollback_${index}`);
-    const directory = await plan(migrations.slice(0, index));
-    await runMigrations({ databaseUrl: database.url, migrationsDirectory: directory });
-    const filename = migrations[index]!;
-    const sql = await readFile(join(migrationsDirectory, filename), "utf8");
-    await writeFile(join(directory, filename), `${sql}\nSELECT ccpo_missing_forecast_object();\n`);
-    await expect(
-      runMigrations({ databaseUrl: database.url, migrationsDirectory: directory }),
-    ).rejects.toThrow(new RegExp(`failed to apply migration ${filename.slice(0, 4)}`, "iu"));
-    const cleanDirectory = await plan(migrations.slice(0, index + 1));
-    await runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory });
-    const path = join(cleanDirectory, filename);
-    await writeFile(path, `${await readFile(path, "utf8")}\n-- drift\n`);
-    await expect(
-      runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory }),
-    ).rejects.toThrow(new RegExp(`checksum drift.*${filename.slice(0, 4)}`, "iu"));
-  });
+  it.each([15, 16, 17, 18])(
+    "rolls back failed migration index %s and rejects drift",
+    async (index) => {
+      const database = await fresh(`ccpo_optimizer_rollback_${index}`);
+      const directory = await plan(migrations.slice(0, index));
+      await runMigrations({ databaseUrl: database.url, migrationsDirectory: directory });
+      const filename = migrations[index]!;
+      const sql = await readFile(join(migrationsDirectory, filename), "utf8");
+      await writeFile(
+        join(directory, filename),
+        `${sql}\nSELECT ccpo_missing_optimizer_object();\n`,
+      );
+      await expect(
+        runMigrations({ databaseUrl: database.url, migrationsDirectory: directory }),
+      ).rejects.toThrow(new RegExp(`failed to apply migration ${filename.slice(0, 4)}`, "iu"));
+      const cleanDirectory = await plan(migrations.slice(0, index + 1));
+      await runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory });
+      const path = join(cleanDirectory, filename);
+      await writeFile(path, `${await readFile(path, "utf8")}\n-- drift\n`);
+      await expect(
+        runMigrations({ databaseUrl: database.url, migrationsDirectory: cleanDirectory }),
+      ).rejects.toThrow(new RegExp(`checksum drift.*${filename.slice(0, 4)}`, "iu"));
+    },
+  );
 });

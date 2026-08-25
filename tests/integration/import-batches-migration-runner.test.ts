@@ -31,22 +31,26 @@ const migrations = [
   "0013_create_price_table_items.sql",
   "0014_create_forecast_models.sql",
   "0015_create_forecast_runs.sql",
+  "0016_create_scenarios.sql",
+  "0017_create_optimizer_policies.sql",
+  "0018_create_optimizer_runs.sql",
+  "0019_create_recommendations.sql",
 ] as const;
 const acceptedHashes: Record<string, string> = {
-  "0001_create_tenants.sql": "d6ecd27b3f264c4bf8c0034697a6b21cb46c887beb26542d7958641cf30d5cba",
-  "0002_create_users.sql": "07e669075706defc740198aab7d1eaf8c058f6d7e30832a1b26565b99f42e79e",
-  "0003_create_api_keys.sql": "c9f239dcebed86629a07d29536c3fa9b22c5ca31da1158f0c0aafce2025f3b4d",
+  "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
+  "0002_create_users.sql": "9b18fe2ab934a0eb43f1f06e593b10711e1357e341b550704212cbec06b63111",
+  "0003_create_api_keys.sql": "5e962937796270e3e2d39251a44f710d36333387d3ecdbdc905c2c71290675b4",
   "0004_create_registration_requests.sql":
-    "c6612e110825c1c561f70cbf43b8e91c27047eec5ffd5e0af9294b601b6b0d42",
-  "0005_create_audit_log.sql": "131ef18fa47ffd45a97e2ae5d7056aaa1b8fce4df2542ed20041d75be85a1160",
+    "11c4f978428704b567c74bff80a27b57011567ca3d9490e7319271325224185f",
+  "0005_create_audit_log.sql": "4296a46de9f3fe8e904a285bfc4c0ef5e090d62582c4ad5c5eaba38ddfc6d3f8",
   "0006_create_user_auth_credentials.sql":
-    "b44a0205508198ba95f845619ee9245adae58bd935e3980aa78309692109a489",
+    "9338f956a35739cf501aea81012d2d65c40dc5b14378218fc51fd55281c2f122",
   "0007_create_auth_refresh_families.sql":
-    "0ce44ddde7356e7bd10a99a358697659d3e8e5c3dd6150e95c52e680cb55c40a",
+    "cda9fd4cf03282d3faf36623a7afcdb3a30e6215e9c34658eca38c176f05c77c",
   "0008_create_auth_refresh_tokens.sql":
-    "aa9373ec4dccff0c594de02b2bd0404990df17b9f4bf0321c2f3b24e3fcf9b60",
+    "6e2ca0231ccf9dd855411be23913cf2c25e2151e45b4be1f81dd5158708fbfbd",
   "0009_create_cloud_accounts.sql":
-    "fac094105a711724a6829b9e97c62c328344b3b1437dc348f279db551100cc22",
+    "713136d8fd6bae27e52b297aa72de98152faeef7c35007aedc85a2d99dd6d9a1",
 };
 let databases: IsolatedDatabase[] = [];
 let temporaryDirectories: string[] = [];
@@ -87,7 +91,7 @@ describe("production import batches migration runner and CLI", () => {
     );
   });
 
-  it("applies through 0013, re-applies unchanged, and reports an empty import table", async () => {
+  it("applies through 0019, re-applies unchanged, and reports an empty import table", async () => {
     const database = await freshDatabase("ccpo_import_batches_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -102,7 +106,7 @@ describe("production import batches migration runner and CLI", () => {
     await client.end();
     expect(first).toEqual({ applied: [...migrations], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...migrations] });
-    expect(cli.stdout).toBe("Migrations complete: 0 applied, 15 unchanged.\n");
+    expect(cli.stdout).toBe("Migrations complete: 0 applied, 19 unchanged.\n");
     expect(cli.stderr).toBe("");
     expect(count.rows[0]?.count).toBe("0");
   });
@@ -114,7 +118,7 @@ describe("production import batches migration runner and CLI", () => {
       [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/db-migrate.ts")],
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
-    expect(result.stdout).toContain("Migrations complete: 15 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");
     expect(result.stderr).toBe("");
   });

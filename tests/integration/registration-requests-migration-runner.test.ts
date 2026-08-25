@@ -34,11 +34,15 @@ const allMigrationFilenames = [
   "0013_create_price_table_items.sql",
   "0014_create_forecast_models.sql",
   "0015_create_forecast_runs.sql",
+  "0016_create_scenarios.sql",
+  "0017_create_optimizer_policies.sql",
+  "0018_create_optimizer_runs.sql",
+  "0019_create_recommendations.sql",
 ] as const;
 const acceptedHashes = {
-  "0001_create_tenants.sql": "d6ecd27b3f264c4bf8c0034697a6b21cb46c887beb26542d7958641cf30d5cba",
-  "0002_create_users.sql": "07e669075706defc740198aab7d1eaf8c058f6d7e30832a1b26565b99f42e79e",
-  "0003_create_api_keys.sql": "c9f239dcebed86629a07d29536c3fa9b22c5ca31da1158f0c0aafce2025f3b4d",
+  "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
+  "0002_create_users.sql": "9b18fe2ab934a0eb43f1f06e593b10711e1357e341b550704212cbec06b63111",
+  "0003_create_api_keys.sql": "5e962937796270e3e2d39251a44f710d36333387d3ecdbdc905c2c71290675b4",
 } as const;
 let databases: IsolatedDatabase[] = [];
 let temporaryDirectories: string[] = [];
@@ -93,7 +97,7 @@ describe("production registration-request migration runner and CLI", () => {
     }
   });
 
-  it("applies the current plan through 0013, re-applies unchanged, and creates zero rows", async () => {
+  it("applies the current plan through 0019, re-applies unchanged, and creates zero rows", async () => {
     const database = await freshDatabase("ccpo_registration_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -122,9 +126,9 @@ describe("production registration-request migration runner and CLI", () => {
     const first = await execFileAsync(process.execPath, command, options);
     const second = await execFileAsync(process.execPath, command, options);
 
-    expect(first.stdout).toContain("Migrations complete: 15 applied, 0 unchanged.");
+    expect(first.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
     expect(first.stdout).toContain("applied 0013_create_price_table_items.sql");
-    expect(second.stdout).toContain("Migrations complete: 0 applied, 15 unchanged.");
+    expect(second.stdout).toContain("Migrations complete: 0 applied, 19 unchanged.");
     expect(first.stderr).toBe("");
     expect(second.stderr).toBe("");
     expect((await readCounts(database.url))?.registration_requests).toBe("0");

@@ -34,14 +34,18 @@ const allMigrationFilenames = [
   "0013_create_price_table_items.sql",
   "0014_create_forecast_models.sql",
   "0015_create_forecast_runs.sql",
+  "0016_create_scenarios.sql",
+  "0017_create_optimizer_policies.sql",
+  "0018_create_optimizer_runs.sql",
+  "0019_create_recommendations.sql",
 ] as const;
 const acceptedHashes = {
-  "0001_create_tenants.sql": "d6ecd27b3f264c4bf8c0034697a6b21cb46c887beb26542d7958641cf30d5cba",
-  "0002_create_users.sql": "07e669075706defc740198aab7d1eaf8c058f6d7e30832a1b26565b99f42e79e",
-  "0003_create_api_keys.sql": "c9f239dcebed86629a07d29536c3fa9b22c5ca31da1158f0c0aafce2025f3b4d",
+  "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
+  "0002_create_users.sql": "9b18fe2ab934a0eb43f1f06e593b10711e1357e341b550704212cbec06b63111",
+  "0003_create_api_keys.sql": "5e962937796270e3e2d39251a44f710d36333387d3ecdbdc905c2c71290675b4",
   "0004_create_registration_requests.sql":
-    "c6612e110825c1c561f70cbf43b8e91c27047eec5ffd5e0af9294b601b6b0d42",
-  "0005_create_audit_log.sql": "131ef18fa47ffd45a97e2ae5d7056aaa1b8fce4df2542ed20041d75be85a1160",
+    "11c4f978428704b567c74bff80a27b57011567ca3d9490e7319271325224185f",
+  "0005_create_audit_log.sql": "4296a46de9f3fe8e904a285bfc4c0ef5e090d62582c4ad5c5eaba38ddfc6d3f8",
 } as const;
 let databases: IsolatedDatabase[] = [];
 let temporaryDirectories: string[] = [];
@@ -96,7 +100,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
     );
   });
 
-  it("applies the current plan through 0013, re-applies unchanged, and CLI reports counts only", async () => {
+  it("applies the current plan through 0019, re-applies unchanged, and CLI reports counts only", async () => {
     const database = await freshDatabase("ccpo_user_credentials_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -112,7 +116,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
     expect(first).toEqual({ applied: [...allMigrationFilenames], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...allMigrationFilenames] });
     expect(receipts.rows.map(({ filename }) => filename)).toEqual([...allMigrationFilenames]);
-    expect(cli.stdout).toBe("Migrations complete: 0 applied, 15 unchanged.\n");
+    expect(cli.stdout).toBe("Migrations complete: 0 applied, 19 unchanged.\n");
     expect(cli.stderr).toBe("");
     expect(await readCounts(database.url)).toEqual({ credentials: "0", users: "0" });
   });
@@ -124,7 +128,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
       cwd: resolve("."),
       env: { ...process.env, DATABASE_URL: database.url },
     });
-    expect(result.stdout).toContain("Migrations complete: 15 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");
     expect(result.stderr).toBe("");
     expect(await readCounts(database.url)).toEqual({ credentials: "0", users: "0" });

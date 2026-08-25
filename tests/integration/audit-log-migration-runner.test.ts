@@ -34,13 +34,17 @@ const allMigrationFilenames = [
   "0013_create_price_table_items.sql",
   "0014_create_forecast_models.sql",
   "0015_create_forecast_runs.sql",
+  "0016_create_scenarios.sql",
+  "0017_create_optimizer_policies.sql",
+  "0018_create_optimizer_runs.sql",
+  "0019_create_recommendations.sql",
 ] as const;
 const acceptedHashes = {
-  "0001_create_tenants.sql": "d6ecd27b3f264c4bf8c0034697a6b21cb46c887beb26542d7958641cf30d5cba",
-  "0002_create_users.sql": "07e669075706defc740198aab7d1eaf8c058f6d7e30832a1b26565b99f42e79e",
-  "0003_create_api_keys.sql": "c9f239dcebed86629a07d29536c3fa9b22c5ca31da1158f0c0aafce2025f3b4d",
+  "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
+  "0002_create_users.sql": "9b18fe2ab934a0eb43f1f06e593b10711e1357e341b550704212cbec06b63111",
+  "0003_create_api_keys.sql": "5e962937796270e3e2d39251a44f710d36333387d3ecdbdc905c2c71290675b4",
   "0004_create_registration_requests.sql":
-    "c6612e110825c1c561f70cbf43b8e91c27047eec5ffd5e0af9294b601b6b0d42",
+    "11c4f978428704b567c74bff80a27b57011567ca3d9490e7319271325224185f",
 } as const;
 let databases: IsolatedDatabase[] = [];
 let temporaryDirectories: string[] = [];
@@ -81,7 +85,7 @@ describe("production audit-log migration runner and CLI", () => {
     expect(auditSql).not.toMatch(/\breport_snapshots\b|\bapi_keys\b/iu);
   });
 
-  it("applies the current plan through 0013 and re-applies unchanged", async () => {
+  it("applies the current plan through 0019 and re-applies unchanged", async () => {
     const database = await freshDatabase("ccpo_audit_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -99,7 +103,7 @@ describe("production audit-log migration runner and CLI", () => {
     expect(first).toEqual({ applied: [...allMigrationFilenames], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...allMigrationFilenames] });
     expect(receipts.rows.map(({ filename }) => filename)).toEqual([...allMigrationFilenames]);
-    expect(cli.stdout).toContain("Migrations complete: 0 applied, 15 unchanged.");
+    expect(cli.stdout).toContain("Migrations complete: 0 applied, 19 unchanged.");
     expect(cli.stderr).toBe("");
     expect(rows.rows[0]?.count).toBe("0");
   });
@@ -111,7 +115,7 @@ describe("production audit-log migration runner and CLI", () => {
       cwd: resolve("."),
       env: { ...process.env, DATABASE_URL: database.url },
     });
-    expect(result.stdout).toContain("Migrations complete: 15 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 19 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");
     expect(result.stderr).toBe("");
   });

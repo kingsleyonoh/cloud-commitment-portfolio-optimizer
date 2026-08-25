@@ -69,7 +69,7 @@ describe.sequential("typed first-run setup", () => {
        FROM tenants`,
     );
 
-    expect(result.migrations.applied.length).toBe(15);
+    expect(result.migrations.applied.length).toBe(19);
     expect(result.initialization.created).toBe(true);
     expect("apiKey" in result.initialization).toBe(true);
     expect(snapshot).toEqual({

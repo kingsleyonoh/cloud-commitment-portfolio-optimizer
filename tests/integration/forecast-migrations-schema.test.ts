@@ -125,6 +125,7 @@ describe("exact PRD 4.8 and 4.9 forecast catalogs", () => {
       { tablename: "forecast_models", indexname: "forecast_models_tenant_name_key" },
       { tablename: "forecast_models", indexname: "forecast_models_tenant_status_created_idx" },
       { tablename: "forecast_runs", indexname: "forecast_runs_pkey" },
+      { tablename: "forecast_runs", indexname: "forecast_runs_tenant_id_id_key" },
       { tablename: "forecast_runs", indexname: "forecast_runs_tenant_model_status_created_idx" },
       { tablename: "forecast_runs", indexname: "forecast_runs_tenant_window_created_idx" },
     ]);
