@@ -1,0 +1,2 @@
+lineItem/UsageAccountId,lineItem/ProductCode,lineItem/UsageType,product/region,lineItem/UsageStartDate,lineItem/UsageEndDate,lineItem/UsageAmount,lineItem/UsageUnit,pricing/publicOnDemandCost,savingsPlan/SavingsPlanEffectiveCost
+123456789012,AmazonEC2,BoxUsage:m7g.large,us-east-1,2026-03-01T00:00:00Z,2026-03-01T01:00:00Z,1.50000000,Hrs,0.0300000000,0.0180000000

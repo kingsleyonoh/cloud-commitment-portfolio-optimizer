@@ -49,7 +49,7 @@ export type ImportBatchCursorBoundary = Readonly<{
 export type ImportBatchListInput = Readonly<{
   limit: number;
   cursor?: ImportBatchCursorBoundary;
-  source?: "synthetic";
+  source?: "synthetic" | "aws_cur";
   format?: "csv";
   status?: ImportStatus;
   cloudAccountId?: string;
@@ -68,7 +68,7 @@ export type ImportControlTotal = Readonly<{
 }>;
 
 export type ImportCreateInput = Readonly<{
-  source: "synthetic";
+  source: "synthetic" | "aws_cur";
   format: "csv";
   objectUri: string;
   cloudAccountId: string;

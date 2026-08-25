@@ -1,0 +1,4 @@
+lineItem/UsageAccountId,lineItem/ProductCode,lineItem/UsageType,product/region,lineItem/UsageStartDate,lineItem/UsageEndDate,lineItem/UsageAmount,lineItem/UsageUnit,pricing/publicOnDemandCost,lineItem/UnblendedCost,savingsPlan/SavingsPlanEffectiveCost,resourceTags/user:Environment
+123456789012,AmazonEC2,BoxUsage:m7g.large,us-east-1,2026-03-01T00:00:00Z,2026-03-01T01:00:00Z,1.50000000,Hrs,0.0300000000,0.0180000000,0.0180000000,prod
+123456789012,AmazonEC2,BoxUsage:m7g.large,us-east-1,2026-03-01T01:00:00Z,2026-03-01T02:00:00Z,2.50000000,Hrs,0.0500000000,0.0320000000,0.0320000000,prod
+123456789012,AmazonS3,TimedStorage-ByteHrs,us-east-1,2026-03-02T00:00:00Z,2026-03-02T01:00:00Z,3.00000000,GB-Mo,0.0900000000,0.0700000000,0.0700000000,storage

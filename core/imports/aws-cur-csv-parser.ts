@@ -1,48 +1,53 @@
-import type {
-  ImportControlTotal,
-  ImportParseResult,
-  ParsedSyntheticCsv,
-  UsageLineItemInput,
-} from "./imports-types.js";
 import { parseCsv } from "./csv.js";
+import type { ImportControlTotal, ImportParseResult, UsageLineItemInput } from "./imports-types.js";
 
 const REQUIRED_COLUMNS = [
-  "provider",
-  "service_code",
-  "sku",
-  "region",
-  "usage_start",
-  "usage_end",
-  "usage_quantity",
-  "usage_unit",
-  "on_demand_cost_cents",
-  "realized_cost_cents",
-  "commitment_applied_cents",
-  "tags",
+  "lineItem/UsageAccountId",
+  "lineItem/ProductCode",
+  "lineItem/UsageType",
+  "product/region",
+  "lineItem/UsageStartDate",
+  "lineItem/UsageEndDate",
+  "lineItem/UsageAmount",
+  "lineItem/UsageUnit",
+  "pricing/publicOnDemandCost",
+  "lineItem/UnblendedCost",
 ] as const;
+
+const KNOWN_OPTIONAL_COLUMNS: ReadonlySet<string> = new Set([
+  "savingsPlan/SavingsPlanEffectiveCost",
+  "resourceTags/user:Environment",
+]);
 
 const REQUIRED_COLUMN_SET: ReadonlySet<string> = new Set(REQUIRED_COLUMNS);
 const DECIMAL_8_PATTERN = /^(?:0|[1-9][0-9]{0,19})\.[0-9]{8}$/u;
-const UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]{0,18})$/u;
+const MONEY_PATTERN = /^(?:0|[1-9][0-9]{0,17})(?:\.[0-9]{1,10})?$/u;
 
-export function parseSyntheticCsvImport(
+export function parseAwsCurCsvImport(
   bytes: Buffer,
   accountProvider: "aws" | "azure" | "gcp",
   controlTotals: readonly ImportControlTotal[],
 ): ImportParseResult {
-  const text = bytes.toString("utf8");
-  const records = parseCsv(text);
-  if (records.length < 2) return quarantine(0, "IMPORT_EMPTY", "Synthetic CSV has no usage rows.");
+  if (accountProvider !== "aws") {
+    return quarantine(
+      0,
+      "IMPORT_ACCOUNT_PROVIDER_MISMATCH",
+      "AWS CUR imports require an AWS account.",
+    );
+  }
+  const records = parseCsv(bytes.toString("utf8"));
+  if (records.length < 2) return quarantine(0, "IMPORT_EMPTY", "AWS CUR CSV has no usage rows.");
   const [header = [], ...rows] = records;
   const headerValidation = validateHeader(header);
-  if (headerValidation.kind === "quarantined") {
+  if (headerValidation.kind === "quarantined")
     return { ...headerValidation, lineCount: rows.length };
-  }
+
   const parsedRows: UsageLineItemInput[] = [];
   for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index] ?? [];
-    const parsed = parseUsageRow(header, row, index + 2, accountProvider);
-    if (parsed.kind === "quarantined") return { ...parsed, lineCount: rows.length };
+    const parsed = parseUsageRow(header, rows[index] ?? [], index + 2);
+    if (parsed.kind === "quarantined") {
+      return { ...parsed, lineCount: rows.length, parserWarnings: headerValidation.parserWarnings };
+    }
     parsedRows.push(parsed.row);
   }
   const controlValidation = validateControlTotals(parsedRows, controlTotals);
@@ -60,7 +65,7 @@ export function parseSyntheticCsvImport(
       lineCount: rows.length,
       rows: Object.freeze(parsedRows),
       parserWarnings: headerValidation.parserWarnings,
-    } satisfies ParsedSyntheticCsv),
+    }),
   };
 }
 
@@ -79,7 +84,9 @@ function validateHeader(header: readonly string[]):
       parserWarnings: [],
     };
   }
-  const extra = header.filter((column) => !REQUIRED_COLUMN_SET.has(column));
+  const extra = header.filter(
+    (column) => !REQUIRED_COLUMN_SET.has(column) && !KNOWN_OPTIONAL_COLUMNS.has(column),
+  );
   return {
     kind: "parsed",
     parserWarnings: Object.freeze(
@@ -92,7 +99,6 @@ function parseUsageRow(
   header: readonly string[],
   row: readonly string[],
   line: number,
-  accountProvider: "aws" | "azure" | "gcp",
 ):
   | Readonly<{ kind: "parsed"; row: UsageLineItemInput }>
   | Readonly<{
@@ -101,45 +107,50 @@ function parseUsageRow(
       parserWarnings: readonly Record<string, unknown>[];
     }> {
   try {
-    const value = (column: (typeof REQUIRED_COLUMNS)[number]) => row[header.indexOf(column)] ?? "";
-    const provider = value("provider");
-    if (provider !== "aws" && provider !== "azure" && provider !== "gcp") {
-      return rowError(line, "provider");
-    }
-    if (provider !== accountProvider) return rowError(line, "provider");
-    const usageStart = isoDate(value("usage_start"));
-    const usageEnd = isoDate(value("usage_end"));
+    const value = (column: string) => row[header.indexOf(column)] ?? "";
+    const usageStart = isoDate(value("lineItem/UsageStartDate"));
+    const usageEnd = isoDate(value("lineItem/UsageEndDate"));
     if (!usageStart || !usageEnd || Date.parse(usageEnd) <= Date.parse(usageStart)) {
       return rowError(line, "usage_period");
     }
-    const onDemandCostCents = integer(value("on_demand_cost_cents"));
-    const realizedCostCents = integer(value("realized_cost_cents"));
-    const commitmentAppliedCents = integer(value("commitment_applied_cents"));
-    if (BigInt(commitmentAppliedCents) > BigInt(onDemandCostCents)) {
-      return rowError(line, "commitment_applied_cents");
-    }
-    const tags = parseTags(value("tags"));
-    if (!tags) return rowError(line, "tags");
+    const onDemandCostCents = moneyCents(value("pricing/publicOnDemandCost"));
+    const realizedCostCents = moneyCents(
+      value("savingsPlan/SavingsPlanEffectiveCost") || value("lineItem/UnblendedCost"),
+    );
+    const commitmentAppliedCents =
+      BigInt(onDemandCostCents) > BigInt(realizedCostCents)
+        ? (BigInt(onDemandCostCents) - BigInt(realizedCostCents)).toString()
+        : "0";
     return {
       kind: "parsed",
       row: Object.freeze({
-        provider,
-        serviceCode: text(value("service_code")),
-        sku: text(value("sku")),
-        region: text(value("region")),
+        provider: "aws",
+        serviceCode: text(value("lineItem/ProductCode")),
+        sku: text(value("lineItem/UsageType")),
+        region: text(value("product/region")),
         usageStart,
         usageEnd,
-        usageQuantity: decimal(value("usage_quantity")),
-        usageUnit: text(value("usage_unit")),
+        usageQuantity: decimal8(value("lineItem/UsageAmount")),
+        usageUnit: text(value("lineItem/UsageUnit")),
         onDemandCostCents,
         realizedCostCents,
         commitmentAppliedCents,
-        tags,
+        tags: tags(header, row),
       }),
     };
   } catch {
     return rowError(line, "required_field");
   }
+}
+
+function tags(header: readonly string[], row: readonly string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const column of header) {
+    if (!column.startsWith("resourceTags/user:")) continue;
+    const raw = row[header.indexOf(column)]?.normalize("NFC").trim();
+    if (raw) result[column.slice("resourceTags/user:".length)] = raw;
+  }
+  return Object.freeze(result);
 }
 
 function validateControlTotals(
@@ -215,34 +226,25 @@ function text(value: string): string {
   return trimmed;
 }
 
-function decimal(value: string): string {
+function decimal8(value: string): string {
   const trimmed = value.trim();
   if (!DECIMAL_8_PATTERN.test(trimmed)) throw new Error("invalid decimal");
   return trimmed;
 }
 
-function integer(value: string): string {
+function moneyCents(value: string): string {
   const trimmed = value.trim();
-  if (!UNSIGNED_INTEGER_PATTERN.test(trimmed)) throw new Error("invalid integer");
-  return trimmed;
+  if (!MONEY_PATTERN.test(trimmed)) throw new Error("invalid money");
+  const [whole, fraction = ""] = trimmed.split(".") as [string, string?];
+  const scale = 10_000_000_000n;
+  const scaled = BigInt(whole) * scale + BigInt(fraction.padEnd(10, "0"));
+  return ((scaled * 100n + scale / 2n) / scale).toString();
 }
 
 function isoDate(value: string): string | null {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return null;
   return parsed.toISOString();
-}
-
-function parseTags(value: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const encoded = JSON.stringify(parsed);
-    if (/password|secret|token|credential/iu.test(encoded)) return null;
-    return Object.freeze({ ...(parsed as Record<string, unknown>) });
-  } catch {
-    return null;
-  }
 }
 
 function parseScaledDecimal(value: string): bigint {

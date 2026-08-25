@@ -2,6 +2,7 @@ import type { ObjectStore } from "../shared/objectStore.js";
 import { AppError } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import type { RequestContext } from "../tenant/request-context.js";
+import { parseAwsCurCsvImport } from "./aws-cur-csv-parser.js";
 import { decodeImportBatchCursor, encodeImportBatchCursor } from "./imports-cursor.js";
 import {
   parseImportBatchId,
@@ -79,7 +80,10 @@ async function createImport(
   if (!account) throw notFound();
   if (!account.isActive) throw inactiveAccount();
   const bytes = await safeObjectRead(() => objectStore.get(input.objectUri));
-  const parseResult = parseSyntheticCsvImport(bytes, account.provider, input.controlTotals);
+  const parseResult =
+    input.source === "aws_cur"
+      ? parseAwsCurCsvImport(bytes, account.provider, input.controlTotals)
+      : parseSyntheticCsvImport(bytes, account.provider, input.controlTotals);
   const batch = await safe(() =>
     repository.createSyntheticCsvImport({
       tenantId: context.tenantId,

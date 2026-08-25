@@ -19,7 +19,7 @@ export function parseImportCreateBody(body: unknown): ImportCreateInput {
     new Set(["source", "format", "object_uri", "cloud_account_id", "control_totals"]),
   );
   if (
-    object.source !== "synthetic" ||
+    (object.source !== "synthetic" && object.source !== "aws_cur") ||
     object.format !== "csv" ||
     typeof object.object_uri !== "string" ||
     typeof object.cloud_account_id !== "string" ||
@@ -28,7 +28,7 @@ export function parseImportCreateBody(body: unknown): ImportCreateInput {
     throw invalid();
   }
   return Object.freeze({
-    source: "synthetic",
+    source: object.source,
     format: "csv",
     objectUri: objectKey(object.object_uri),
     cloudAccountId: uuidValue(object.cloud_account_id),
@@ -114,9 +114,9 @@ function parseLimit(value: unknown): number {
   return Number.parseInt(value, 10);
 }
 
-function parseSource(value: unknown): "synthetic" {
-  if (value !== "synthetic") throw invalid();
-  return "synthetic";
+function parseSource(value: unknown): "synthetic" | "aws_cur" {
+  if (value !== "synthetic" && value !== "aws_cur") throw invalid();
+  return value;
 }
 
 function parseFormat(value: unknown): "csv" {

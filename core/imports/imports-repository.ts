@@ -135,7 +135,7 @@ async function createImport(
   const batch = await client.query<{ id: string }>(
     `INSERT INTO import_batches
        (tenant_id, cloud_account_id, source, format, object_uri, schema_version, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, 'synthetic_csv:v1', $6)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
     [
       input.tenantId,
@@ -143,6 +143,7 @@ async function createImport(
       input.create.source,
       input.create.format,
       input.create.objectUri,
+      schemaVersion(input.create.source),
       input.createdByUserId,
     ],
   );
@@ -188,6 +189,10 @@ async function createImport(
     errorDetails: input.parseResult.errorDetails,
     parserWarnings: input.parseResult.parserWarnings,
   });
+}
+
+function schemaVersion(source: ImportCreateInput["source"]): string {
+  return source === "aws_cur" ? "aws_cur_csv:v1" : "synthetic_csv:v1";
 }
 
 async function updateBatch(

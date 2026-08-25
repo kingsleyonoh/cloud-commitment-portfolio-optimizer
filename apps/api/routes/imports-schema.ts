@@ -51,7 +51,7 @@ export const importCreateBodySchema = {
   additionalProperties: false,
   required: ["source", "format", "object_uri", "cloud_account_id", "control_totals"],
   properties: {
-    source: { type: "string", const: "synthetic" },
+    source: { type: "string", enum: ["synthetic", "aws_cur"] },
     format: { type: "string", const: "csv" },
     object_uri: { type: "string", minLength: 1, maxLength: 2048 },
     cloud_account_id: { type: "string", format: "uuid" },
@@ -65,7 +65,7 @@ export const importsListQuerySchema = {
   properties: {
     limit: { type: "string", pattern: "^(?:[1-9]|[1-9][0-9]|100)$" },
     cursor: { type: "string", minLength: 1, maxLength: 512 },
-    source: { type: "string", const: "synthetic" },
+    source: { type: "string", enum: ["synthetic", "aws_cur"] },
     format: { type: "string", const: "csv" },
     status: {
       type: "string",

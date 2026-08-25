@@ -211,14 +211,14 @@ describe("POST /api/imports synthetic CSV", () => {
         tenant_id: harness.tenantB,
       },
       {
-        source: "aws_cur",
+        source: "azure_export",
         format: "csv",
         object_uri: "x.csv",
         cloud_account_id: harness.accountA,
         control_totals: [],
       },
       {
-        source: "synthetic",
+        source: "aws_cur",
         format: "json_api_snapshot",
         object_uri: "x.json",
         cloud_account_id: harness.accountA,
@@ -239,6 +239,144 @@ describe("POST /api/imports synthetic CSV", () => {
       });
     }
     expect(await importBatchCount()).toBe(before);
+  });
+});
+
+describe("POST /api/imports AWS CUR CSV", () => {
+  it("imports AWS CUR CSV into canonical immutable usage rows with matching control totals", async () => {
+    await putFixtureObject(
+      harness,
+      "imports/aws/cur-valid.csv",
+      resolve("tests/fixtures/aws/cur-valid.csv"),
+    );
+    const response = await postImport({
+      source: "aws_cur",
+      format: "csv",
+      object_uri: "imports/aws/cur-valid.csv",
+      cloud_account_id: harness.accountA,
+      control_totals: [
+        {
+          provider: "aws",
+          service_code: "AmazonEC2",
+          region: "us-east-1",
+          month: "2026-03",
+          line_count: "2",
+          usage_quantity: "4.00000000",
+          on_demand_cost_cents: "8",
+          realized_cost_cents: "5",
+          commitment_applied_cents: "3",
+        },
+        {
+          provider: "aws",
+          service_code: "AmazonS3",
+          region: "us-east-1",
+          month: "2026-03",
+          line_count: "1",
+          usage_quantity: "3.00000000",
+          on_demand_cost_cents: "9",
+          realized_cost_cents: "7",
+          commitment_applied_cents: "2",
+        },
+      ],
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      cloud_account_id: harness.accountA,
+      source: "aws_cur",
+      format: "csv",
+      status: "completed",
+      object_uri: "imports/aws/cur-valid.csv",
+      schema_version: "aws_cur_csv:v1",
+      line_count: "3",
+      error_details: {},
+      parser_warnings: [],
+    });
+    expect(response.body).not.toMatch(/tenant_id|raw_row|stack|credential|authorization/iu);
+    expect(await usageControlTotals(response.json().id)).toEqual([
+      {
+        provider: "aws",
+        service_code: "AmazonEC2",
+        region: "us-east-1",
+        month: "2026-03",
+        line_count: "2",
+        usage_quantity: "4.00000000",
+        on_demand_cost_cents: "8",
+        realized_cost_cents: "5",
+        commitment_applied_cents: "3",
+      },
+      {
+        provider: "aws",
+        service_code: "AmazonS3",
+        region: "us-east-1",
+        month: "2026-03",
+        line_count: "1",
+        usage_quantity: "3.00000000",
+        on_demand_cost_cents: "9",
+        realized_cost_cents: "7",
+        commitment_applied_cents: "2",
+      },
+    ]);
+  });
+
+  it("quarantines AWS schema drift and records unknown optional CUR columns as warnings", async () => {
+    await putFixtureObject(
+      harness,
+      "imports/aws/cur-invalid-missing-cost.csv",
+      resolve("tests/fixtures/aws/cur-invalid-missing-cost.csv"),
+    );
+    const invalid = await postImport({
+      source: "aws_cur",
+      format: "csv",
+      object_uri: "imports/aws/cur-invalid-missing-cost.csv",
+      cloud_account_id: harness.accountA,
+      control_totals: [],
+    });
+    expect(invalid.statusCode).toBe(201);
+    expect(invalid.json()).toMatchObject({
+      source: "aws_cur",
+      status: "quarantined",
+      schema_version: "aws_cur_csv:v1",
+      line_count: "1",
+      parser_warnings: [],
+      error_details: { code: "IMPORT_SCHEMA_DRIFT" },
+    });
+    const rows = await harness.pool.query<{ count: string }>(
+      "SELECT count(*) FROM usage_line_items WHERE import_batch_id = $1",
+      [invalid.json().id],
+    );
+    expect(rows.rows[0]!.count).toBe("0");
+
+    await putFixtureObject(
+      harness,
+      "imports/aws/cur-warning.csv",
+      resolve("tests/fixtures/aws/cur-warning.csv"),
+    );
+    const warning = await postImport({
+      source: "aws_cur",
+      format: "csv",
+      object_uri: "imports/aws/cur-warning.csv",
+      cloud_account_id: harness.accountA,
+      control_totals: [
+        {
+          provider: "aws",
+          service_code: "AmazonEC2",
+          region: "us-west-2",
+          month: "2026-04",
+          line_count: "1",
+          usage_quantity: "1.00000000",
+          on_demand_cost_cents: "20",
+          realized_cost_cents: "15",
+          commitment_applied_cents: "5",
+        },
+      ],
+    });
+    expect(warning.statusCode).toBe(201);
+    expect(warning.json()).toMatchObject({
+      source: "aws_cur",
+      status: "completed",
+      parser_warnings: [{ code: "UNKNOWN_OPTIONAL_FIELD", field: "lineItem/LegalEntity" }],
+    });
   });
 });
 
@@ -309,7 +447,7 @@ describe("GET /api/imports", () => {
       `tenant_id=${harness.tenantB}`,
       "limit=0",
       "status=queued%00",
-      "source=aws_cur",
+      "source=azure_export",
       "format=json_api_snapshot",
       "unknown=value",
     ]) {
