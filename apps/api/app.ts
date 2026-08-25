@@ -12,6 +12,7 @@ import {
   registerApiKeyRotationRoute,
   type ApiKeyRotationRuntime,
 } from "./routes/api-key-rotation.js";
+import { registerCloudAccountsRoutes, type CloudAccountsRuntime } from "./routes/cloud-accounts.js";
 import { registerHealthRoutes, type DatabaseProbe } from "./routes/health.js";
 import {
   registerTenantRegistrationRoute,
@@ -32,6 +33,7 @@ export interface BuildAppOptions {
   users?: UsersRuntime;
   apiKeys?: ApiKeyMetadataRuntime;
   apiKeyRotation?: ApiKeyRotationRuntime;
+  cloudAccounts?: CloudAccountsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
 
@@ -82,6 +84,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.users) registerUsersRoutes(instance, options.users);
         if (options.apiKeys) registerApiKeyMetadataRoute(instance, options.apiKeys);
         if (options.apiKeyRotation) registerApiKeyRotationRoute(instance, options.apiKeyRotation);
+        if (options.cloudAccounts) registerCloudAccountsRoutes(instance, options.cloudAccounts);
         await options.protectedRoutes?.(instance);
       },
     });

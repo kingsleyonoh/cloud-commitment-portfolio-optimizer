@@ -8,6 +8,8 @@ import { createApiKeyMetadataRepository } from "../../core/tenant/api-key-metada
 import { createApiKeyMetadataService } from "../../core/tenant/api-key-metadata-service.js";
 import { createApiKeyRotationRepository } from "../../core/tenant/api-key-rotation-repository.js";
 import { createApiKeyRotationService } from "../../core/tenant/api-key-rotation-service.js";
+import { createCloudAccountsRepository } from "../../core/tenant/cloud-accounts-repository.js";
+import { createCloudAccountsService } from "../../core/tenant/cloud-accounts-service.js";
 import {
   getRegistrationLimiter,
   type RegistrationLimiter,
@@ -169,6 +171,10 @@ function applicationOptions(
         createApiKeyRotationRepository(database.pool),
         config.tenant?.apiKeyPrefix ?? "ccpo",
       ),
+    },
+    cloudAccounts: {
+      limiter: usersLimiter,
+      service: createCloudAccountsService(createCloudAccountsRepository(database.pool), logger),
     },
     ...(config.tenant?.registrationTrustedProxyCidrs
       ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }

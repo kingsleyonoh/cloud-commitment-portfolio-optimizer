@@ -7,13 +7,16 @@ import {
   createRedisRollingWindowLimiter,
   type RollingWindowDecision,
 } from "../shared/rolling-window-limiter.js";
-import type { UserRequestContext } from "./request-context.js";
+import type { RequestContext } from "./request-context.js";
 
 export const USERS_LIMIT_WINDOW_MS = 60_000;
 export const USERS_LIST_LIMIT = 60;
 export const USERS_MUTATION_LIMIT = 30;
 export const API_KEY_ROTATION_LIMIT = 5;
 export const PASSWORD_PROVISION_LIMIT = 5;
+export const CLOUD_ACCOUNTS_LIST_LIMIT = 120;
+export const CLOUD_ACCOUNTS_MUTATION_LIMIT = 60;
+export const CLOUD_ACCOUNTS_DEACTIVATE_LIMIT = 20;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -21,13 +24,16 @@ export type ProtectedUsersRoute =
   | "/api/users/{id}"
   | "/api/users/{id}/credentials/password"
   | "/api/api-keys"
-  | "/api/api-keys/rotate";
+  | "/api/api-keys/rotate"
+  | "/api/cloud-accounts"
+  | "/api/cloud-accounts/{id}"
+  | "/api/cloud-accounts/{id}/deactivate";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
 export interface ProtectedUsersLimiter {
   readonly mode: "local" | "redis" | "trusted_edge";
   admit(
-    context: UserRequestContext,
+    context: RequestContext,
     method: ProtectedUsersMethod,
     route: ProtectedUsersRoute,
     targetId?: string,
@@ -50,16 +56,17 @@ export interface ProtectedUsersLimiterConfig {
 }
 
 export function protectedUsersBucketDigest(
-  context: UserRequestContext,
+  context: RequestContext,
   method: ProtectedUsersMethod,
   route: ProtectedUsersRoute,
   targetId?: string,
 ): string {
+  const actorId = context.actorUserId ?? context.apiKeyId;
   const digest = createHash("sha256")
     .update("protected-route-limit:v2\0", "utf8")
     .update(context.tenantId, "utf8")
     .update("\0", "utf8")
-    .update(context.actorUserId, "utf8")
+    .update(actorId ?? "anonymous", "utf8")
     .update("\0", "utf8")
     .update(route, "utf8")
     .update("\0", "utf8")
@@ -118,6 +125,12 @@ function protectedLimiter(
 
 function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsersRoute): number {
   if (method === "POST" && route === "/api/api-keys/rotate") return API_KEY_ROTATION_LIMIT;
+  if (method === "POST" && route === "/api/cloud-accounts/{id}/deactivate") {
+    return CLOUD_ACCOUNTS_DEACTIVATE_LIMIT;
+  }
+  if (route.startsWith("/api/cloud-accounts")) {
+    return method === "GET" ? CLOUD_ACCOUNTS_LIST_LIMIT : CLOUD_ACCOUNTS_MUTATION_LIMIT;
+  }
   if (method === "PUT" && route === "/api/users/{id}/credentials/password") {
     return PASSWORD_PROVISION_LIMIT;
   }
