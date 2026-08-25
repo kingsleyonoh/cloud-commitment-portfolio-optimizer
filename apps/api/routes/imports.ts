@@ -13,6 +13,9 @@ import type { RequestContext } from "../../../core/tenant/request-context.js";
 import {
   importBatchSchema,
   importCreateBodySchema,
+  importPathSchema,
+  importsListQuerySchema,
+  importsListResponseSchema,
   importsResponseSchemas,
 } from "./imports-schema.js";
 
@@ -22,6 +25,29 @@ export interface ImportsRuntime {
 }
 
 export function registerImportsRoutes(app: FastifyInstance, runtime: ImportsRuntime): void {
+  registerListRoute(app, runtime);
+  registerCreateRoute(app, runtime);
+  registerGetRoute(app, runtime);
+}
+
+function registerListRoute(app: FastifyInstance, runtime: ImportsRuntime): void {
+  app.get<{ Querystring: Record<string, unknown> }>(
+    "/api/imports",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/imports", "imports.read"),
+      schema: {
+        querystring: importsListQuerySchema,
+        response: {
+          200: importsListResponseSchema,
+          ...importsResponseSchemas,
+        },
+      },
+    },
+    async (request) => runtime.service.list(requestContext(request.authContext), request.query),
+  );
+}
+
+function registerCreateRoute(app: FastifyInstance, runtime: ImportsRuntime): void {
   app.post<{ Body: unknown }>(
     "/api/imports",
     {
@@ -39,6 +65,23 @@ export function registerImportsRoutes(app: FastifyInstance, runtime: ImportsRunt
       const batch = await runtime.service.create(requestContext(request.authContext), request.body);
       return reply.code(201).send(batch);
     },
+  );
+}
+
+function registerGetRoute(app: FastifyInstance, runtime: ImportsRuntime): void {
+  app.get<{ Params: { id: string } }>(
+    "/api/imports/:id",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/imports/{id}", "imports.read"),
+      schema: {
+        params: importPathSchema,
+        response: {
+          200: importBatchSchema,
+          ...importsResponseSchemas,
+        },
+      },
+    },
+    async (request) => runtime.service.get(requestContext(request.authContext), request.params.id),
   );
 }
 

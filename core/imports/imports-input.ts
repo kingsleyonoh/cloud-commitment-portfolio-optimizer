@@ -1,5 +1,10 @@
 import { AppError } from "../shared/errors.js";
-import type { ImportControlTotal, ImportCreateInput } from "./imports-types.js";
+import type {
+  ImportBatchListInput,
+  ImportControlTotal,
+  ImportCreateInput,
+  ImportStatus,
+} from "./imports-types.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const OBJECT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,2047}$/u;
@@ -26,8 +31,30 @@ export function parseImportCreateBody(body: unknown): ImportCreateInput {
     source: "synthetic",
     format: "csv",
     objectUri: objectKey(object.object_uri),
-    cloudAccountId: uuid(object.cloud_account_id),
+    cloudAccountId: uuidValue(object.cloud_account_id),
     controlTotals: Object.freeze(object.control_totals.map(controlTotal)),
+  });
+}
+
+export function parseImportBatchId(value: unknown): string {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) throw invalid();
+  return value;
+}
+
+export function parseImportListQuery(query: unknown): ImportBatchListInput {
+  const object = closedRecord(query);
+  rejectUnknown(
+    object,
+    new Set(["limit", "cursor", "source", "format", "status", "cloud_account_id"]),
+  );
+  return Object.freeze({
+    limit: parseLimit(object.limit),
+    ...(object.source === undefined ? {} : { source: parseSource(object.source) }),
+    ...(object.format === undefined ? {} : { format: parseFormat(object.format) }),
+    ...(object.status === undefined ? {} : { status: parseStatus(object.status) }),
+    ...(object.cloud_account_id === undefined
+      ? {}
+      : { cloudAccountId: uuidValue(object.cloud_account_id) }),
   });
 }
 
@@ -81,8 +108,38 @@ function objectKey(value: string): string {
   return trimmed;
 }
 
-function uuid(value: string): string {
-  if (!UUID_PATTERN.test(value)) throw invalid();
+function parseLimit(value: unknown): number {
+  if (value === undefined) return 50;
+  if (typeof value !== "string" || !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(value)) throw invalid();
+  return Number.parseInt(value, 10);
+}
+
+function parseSource(value: unknown): "synthetic" {
+  if (value !== "synthetic") throw invalid();
+  return "synthetic";
+}
+
+function parseFormat(value: unknown): "csv" {
+  if (value !== "csv") throw invalid();
+  return "csv";
+}
+
+function parseStatus(value: unknown): ImportStatus {
+  if (
+    value !== "queued" &&
+    value !== "processing" &&
+    value !== "completed" &&
+    value !== "failed" &&
+    value !== "quarantined" &&
+    value !== "cancelled"
+  ) {
+    throw invalid();
+  }
+  return value;
+}
+
+function uuidValue(value: unknown): string {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) throw invalid();
   return value;
 }
 

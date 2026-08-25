@@ -242,6 +242,150 @@ describe("POST /api/imports synthetic CSV", () => {
   });
 });
 
+describe("GET /api/imports", () => {
+  it("lists only tenant imports with filters, warnings, and stable cursor pagination", async () => {
+    await putFixtureObject(
+      harness,
+      "imports/synthetic/list-warning.csv",
+      resolve("tests/fixtures/synthetic/usage-warning.csv"),
+    );
+    const created = await postImport(
+      {
+        source: "synthetic",
+        format: "csv",
+        object_uri: "imports/synthetic/list-warning.csv",
+        cloud_account_id: harness.accountA,
+        control_totals: [
+          {
+            provider: "aws",
+            service_code: "AmazonEC2",
+            region: "us-west-2",
+            month: "2026-02",
+            line_count: "1",
+            usage_quantity: "1.00000000",
+            on_demand_cost_cents: "20",
+            realized_cost_cents: "15",
+            commitment_applied_cents: "10",
+          },
+        ],
+      },
+      { "x-api-key": harness.analystApiKey },
+    );
+    await harness.pool.query(
+      `INSERT INTO import_batches
+         (tenant_id, cloud_account_id, source, format, status, object_uri, schema_version, line_count)
+       VALUES ($1, $2, 'synthetic', 'csv', 'completed', 'imports/synthetic/hidden.csv',
+               'synthetic_csv:v1', 1)`,
+      [harness.tenantB, harness.accountB],
+    );
+
+    const first = await harness.app.inject({
+      method: "GET",
+      url: "/api/imports?source=synthetic&status=completed&limit=1",
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().imports).toHaveLength(1);
+    expect(first.json().imports[0]).toMatchObject({
+      id: created.json().id,
+      parser_warnings: [{ code: "UNKNOWN_OPTIONAL_FIELD", field: "note" }],
+    });
+    expect(first.body).not.toContain(harness.tenantB);
+    expect(first.body).not.toContain("hidden.csv");
+    expect(first.json().next_cursor).toEqual(expect.any(String));
+
+    const second = await harness.app.inject({
+      method: "GET",
+      url: `/api/imports?source=synthetic&status=completed&limit=1&cursor=${first.json().next_cursor}`,
+      headers: importsAuthorization(harness, "finops_analyst", "finops_analyst"),
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().imports).toHaveLength(1);
+    expect(second.json().imports[0].id).not.toBe(created.json().id);
+  });
+
+  it("rejects tenant-selecting and malformed filters before repository work", async () => {
+    for (const query of [
+      `tenant_id=${harness.tenantB}`,
+      "limit=0",
+      "status=queued%00",
+      "source=aws_cur",
+      "format=json_api_snapshot",
+      "unknown=value",
+    ]) {
+      const response = await harness.app.inject({
+        method: "GET",
+        url: `/api/imports?${query}`,
+        headers: importsAuthorization(harness),
+      });
+      expect(response.statusCode, query).toBe(400);
+      expect(response.json().error).toEqual({
+        code: "VALIDATION_ERROR",
+        message: "Request is invalid.",
+        details: [],
+      });
+    }
+  });
+});
+
+describe("GET /api/imports/{id}", () => {
+  it("returns import detail with parser warnings and hides cross-tenant IDs", async () => {
+    await putFixtureObject(
+      harness,
+      "imports/synthetic/detail-warning.csv",
+      resolve("tests/fixtures/synthetic/usage-warning.csv"),
+    );
+    const created = await postImport({
+      source: "synthetic",
+      format: "csv",
+      object_uri: "imports/synthetic/detail-warning.csv",
+      cloud_account_id: harness.accountA,
+      control_totals: [
+        {
+          provider: "aws",
+          service_code: "AmazonEC2",
+          region: "us-west-2",
+          month: "2026-02",
+          line_count: "1",
+          usage_quantity: "1.00000000",
+          on_demand_cost_cents: "20",
+          realized_cost_cents: "15",
+          commitment_applied_cents: "10",
+        },
+      ],
+    });
+    const hidden = await harness.pool.query<{ id: string }>(
+      `INSERT INTO import_batches
+         (tenant_id, cloud_account_id, source, format, status, object_uri, schema_version, line_count)
+       VALUES ($1, $2, 'synthetic', 'csv', 'completed', 'imports/synthetic/hidden-detail.csv',
+               'synthetic_csv:v1', 1)
+       RETURNING id`,
+      [harness.tenantB, harness.accountB],
+    );
+
+    const detail = await harness.app.inject({
+      method: "GET",
+      url: `/api/imports/${created.json().id}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({
+      id: created.json().id,
+      status: "completed",
+      parser_warnings: [{ code: "UNKNOWN_OPTIONAL_FIELD", field: "note" }],
+    });
+    expect(detail.body).not.toMatch(/tenant_id|key_hash|plaintext/iu);
+
+    const crossTenant = await harness.app.inject({
+      method: "GET",
+      url: `/api/imports/${hidden.rows[0]!.id}`,
+      headers: importsAuthorization(harness),
+    });
+    expect(crossTenant.statusCode).toBe(404);
+    expect(crossTenant.body).not.toContain(harness.tenantB);
+  });
+});
+
 async function postImport(
   payload: Record<string, unknown>,
   headers = importsAuthorization(harness),

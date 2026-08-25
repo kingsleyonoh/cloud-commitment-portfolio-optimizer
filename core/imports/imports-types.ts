@@ -36,6 +36,25 @@ export type ImportBatch = Readonly<{
   updated_at: string;
 }>;
 
+export type ImportBatchListPage = Readonly<{
+  imports: readonly ImportBatch[];
+  next_cursor: string | null;
+}>;
+
+export type ImportBatchCursorBoundary = Readonly<{
+  createdAt: string;
+  id: string;
+}>;
+
+export type ImportBatchListInput = Readonly<{
+  limit: number;
+  cursor?: ImportBatchCursorBoundary;
+  source?: "synthetic";
+  format?: "csv";
+  status?: ImportStatus;
+  cloudAccountId?: string;
+}>;
+
 export type ImportControlTotal = Readonly<{
   provider: "aws" | "azure" | "gcp";
   serviceCode: string;

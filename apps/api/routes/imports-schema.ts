@@ -59,6 +59,22 @@ export const importCreateBodySchema = {
   },
 } as const;
 
+export const importsListQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "string", pattern: "^(?:[1-9]|[1-9][0-9]|100)$" },
+    cursor: { type: "string", minLength: 1, maxLength: 512 },
+    source: { type: "string", const: "synthetic" },
+    format: { type: "string", const: "csv" },
+    status: {
+      type: "string",
+      enum: ["queued", "processing", "completed", "failed", "quarantined", "cancelled"],
+    },
+    cloud_account_id: { type: "string", format: "uuid" },
+  },
+} as const;
+
 export const importBatchSchema = {
   type: "object",
   additionalProperties: false,
@@ -100,6 +116,28 @@ export const importBatchSchema = {
     created_by_user_id: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
     created_at: { type: "string", format: "date-time" },
     updated_at: { type: "string", format: "date-time" },
+  },
+} as const;
+
+export const importsListResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["imports", "next_cursor"],
+  properties: {
+    imports: { type: "array", items: importBatchSchema },
+    next_cursor: { anyOf: [{ type: "string" }, { type: "null" }] },
+  },
+} as const;
+
+export const importPathSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: {
+      type: "string",
+      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    },
   },
 } as const;
 

@@ -1,6 +1,11 @@
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
-import type { ImportBatchRecord, ImportCreateInput, ImportParseResult } from "./imports-types.js";
+import type {
+  ImportBatchListInput,
+  ImportBatchRecord,
+  ImportCreateInput,
+  ImportParseResult,
+} from "./imports-types.js";
 
 export interface ImportCloudAccountRecord {
   id: string;
@@ -13,6 +18,8 @@ export interface ImportsRepository {
     tenantId: string,
     cloudAccountId: string,
   ): Promise<ImportCloudAccountRecord | null>;
+  list(tenantId: string, input: ImportBatchListInput): Promise<ImportBatchRecord[]>;
+  get(tenantId: string, importBatchId: string): Promise<ImportBatchRecord | null>;
   createSyntheticCsvImport(input: {
     tenantId: string;
     createdByUserId: string | null;
@@ -47,9 +54,55 @@ const PROJECTION = `id, cloud_account_id AS "cloudAccountId", source, format, st
 export function createImportsRepository(pool: Pool): ImportsRepository {
   return {
     getCloudAccount: (tenantId, cloudAccountId) => getCloudAccount(pool, tenantId, cloudAccountId),
+    list: (tenantId, input) => list(pool, tenantId, input),
+    get: (tenantId, importBatchId) => get(pool, tenantId, importBatchId),
     createSyntheticCsvImport: (input) =>
       withTenantTransaction(pool, input.tenantId, (client) => createImport(client, input)),
   };
+}
+
+async function list(
+  pool: Pool,
+  tenantId: string,
+  input: ImportBatchListInput,
+): Promise<ImportBatchRecord[]> {
+  const result = await pool.query<ImportBatchRow>(
+    `SELECT ${PROJECTION}
+       FROM import_batches
+      WHERE tenant_id = $1
+        AND ($2::text IS NULL OR source = $2)
+        AND ($3::text IS NULL OR format = $3)
+        AND ($4::text IS NULL OR status = $4)
+        AND ($5::uuid IS NULL OR cloud_account_id = $5)
+        AND ($6::timestamptz IS NULL OR (created_at, id) < ($6::timestamptz, $7::uuid))
+      ORDER BY created_at DESC, id DESC
+      LIMIT $8`,
+    [
+      tenantId,
+      input.source ?? null,
+      input.format ?? null,
+      input.status ?? null,
+      input.cloudAccountId ?? null,
+      input.cursor?.createdAt ?? null,
+      input.cursor?.id ?? null,
+      input.limit + 1,
+    ],
+  );
+  return result.rows.map(freezeRow);
+}
+
+async function get(
+  pool: Pool,
+  tenantId: string,
+  importBatchId: string,
+): Promise<ImportBatchRecord | null> {
+  const result = await pool.query<ImportBatchRow>(
+    `SELECT ${PROJECTION}
+       FROM import_batches
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, importBatchId],
+  );
+  return result.rows[0] ? freezeRow(result.rows[0]) : null;
 }
 
 async function getCloudAccount(

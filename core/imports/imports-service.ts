@@ -2,13 +2,20 @@ import type { ObjectStore } from "../shared/objectStore.js";
 import { AppError } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import type { RequestContext } from "../tenant/request-context.js";
-import { parseImportCreateBody } from "./imports-input.js";
+import { decodeImportBatchCursor, encodeImportBatchCursor } from "./imports-cursor.js";
+import {
+  parseImportBatchId,
+  parseImportCreateBody,
+  parseImportListQuery,
+} from "./imports-input.js";
 import type { ImportsRepository } from "./imports-repository.js";
-import type { ImportBatch, ImportBatchRecord } from "./imports-types.js";
+import type { ImportBatch, ImportBatchListPage, ImportBatchRecord } from "./imports-types.js";
 import { parseSyntheticCsvImport } from "./synthetic-csv-parser.js";
 
 export interface ImportsService {
   create(context: RequestContext, body: unknown): Promise<ImportBatch>;
+  list(context: RequestContext, query: unknown): Promise<ImportBatchListPage>;
+  get(context: RequestContext, importBatchId: unknown): Promise<ImportBatch>;
 }
 
 export function createImportsService(
@@ -18,7 +25,44 @@ export function createImportsService(
 ): ImportsService {
   return {
     create: (context, body) => createImport(repository, objectStore, logger, context, body),
+    list: (context, query) => listImports(repository, context, query),
+    get: (context, importBatchId) => getImport(repository, context, importBatchId),
   };
+}
+
+async function listImports(
+  repository: ImportsRepository,
+  context: RequestContext,
+  query: unknown,
+): Promise<ImportBatchListPage> {
+  const parsed = parseImportListQuery(query);
+  const cursor =
+    query && typeof query === "object" && typeof (query as { cursor?: unknown }).cursor === "string"
+      ? decodeImportBatchCursor((query as { cursor: string }).cursor)
+      : undefined;
+  const rows = await safe(() =>
+    repository.list(context.tenantId, {
+      ...parsed,
+      ...(cursor === undefined ? {} : { cursor }),
+    }),
+  );
+  const selected = rows.slice(0, parsed.limit);
+  const last = selected.at(-1);
+  return {
+    imports: selected.map(toImportBatch),
+    next_cursor: rows.length > parsed.limit && last ? encodeImportBatchCursor(last) : null,
+  };
+}
+
+async function getImport(
+  repository: ImportsRepository,
+  context: RequestContext,
+  importBatchId: unknown,
+): Promise<ImportBatch> {
+  const id = parseImportBatchId(importBatchId);
+  const row = await safe(() => repository.get(context.tenantId, id));
+  if (!row) throw notFound();
+  return toImportBatch(row);
 }
 
 async function createImport(
