@@ -19,6 +19,8 @@ export const CLOUD_ACCOUNTS_MUTATION_LIMIT = 60;
 export const CLOUD_ACCOUNTS_DEACTIVATE_LIMIT = 20;
 export const IMPORTS_LIST_LIMIT = 120;
 export const IMPORTS_CREATE_LIMIT = 20;
+export const PRICE_TABLES_LIST_LIMIT = 120;
+export const PRICE_TABLES_MUTATION_LIMIT = 20;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -31,7 +33,9 @@ export type ProtectedUsersRoute =
   | "/api/cloud-accounts/{id}"
   | "/api/cloud-accounts/{id}/deactivate"
   | "/api/imports"
-  | "/api/imports/{id}";
+  | "/api/imports/{id}"
+  | "/api/price-tables"
+  | "/api/price-tables/{id}/activate";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
 export interface ProtectedUsersLimiter {
@@ -137,6 +141,9 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   }
   if (route.startsWith("/api/imports")) {
     return method === "GET" ? IMPORTS_LIST_LIMIT : IMPORTS_CREATE_LIMIT;
+  }
+  if (route.startsWith("/api/price-tables")) {
+    return method === "GET" ? PRICE_TABLES_LIST_LIMIT : PRICE_TABLES_MUTATION_LIMIT;
   }
   if (method === "PUT" && route === "/api/users/{id}/credentials/password") {
     return PASSWORD_PROVISION_LIMIT;

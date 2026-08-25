@@ -2,6 +2,8 @@ import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../../core/config/env.js";
 import { createImportsRepository } from "../../core/imports/imports-repository.js";
 import { createImportsService } from "../../core/imports/imports-service.js";
+import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
+import { createPriceTablesService } from "../../core/price-tables/price-tables-service.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
 import type { Logger } from "../../core/shared/logger.js";
@@ -196,6 +198,12 @@ function applicationOptions(
     imports: {
       limiter: usersLimiter,
       service: createImportsService(createImportsRepository(database.pool), objectStore, logger),
+    },
+    priceTables: {
+      limiter: usersLimiter,
+      service: createPriceTablesService(createPriceTablesRepository(database.pool), {
+        staleDays: config.imports?.priceTableStaleDays ?? 90,
+      }),
     },
     ...(config.tenant?.registrationTrustedProxyCidrs
       ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }

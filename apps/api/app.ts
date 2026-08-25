@@ -15,6 +15,7 @@ import {
 import { registerCloudAccountsRoutes, type CloudAccountsRuntime } from "./routes/cloud-accounts.js";
 import { registerHealthRoutes, type DatabaseProbe } from "./routes/health.js";
 import { registerImportsRoutes, type ImportsRuntime } from "./routes/imports.js";
+import { registerPriceTablesRoutes, type PriceTablesRuntime } from "./routes/price-tables.js";
 import {
   registerTenantRegistrationRoute,
   type TenantRegistrationRuntime,
@@ -36,6 +37,7 @@ export interface BuildAppOptions {
   apiKeyRotation?: ApiKeyRotationRuntime;
   cloudAccounts?: CloudAccountsRuntime;
   imports?: ImportsRuntime;
+  priceTables?: PriceTablesRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
 
@@ -88,6 +90,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.apiKeyRotation) registerApiKeyRotationRoute(instance, options.apiKeyRotation);
         if (options.cloudAccounts) registerCloudAccountsRoutes(instance, options.cloudAccounts);
         if (options.imports) registerImportsRoutes(instance, options.imports);
+        if (options.priceTables) registerPriceTablesRoutes(instance, options.priceTables);
         await options.protectedRoutes?.(instance);
       },
     });
