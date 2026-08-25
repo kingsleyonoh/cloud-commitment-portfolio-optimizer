@@ -1,9 +1,12 @@
 import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../../core/config/env.js";
+import { createImportsRepository } from "../../core/imports/imports-repository.js";
+import { createImportsService } from "../../core/imports/imports-service.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
 import type { Logger } from "../../core/shared/logger.js";
 import { getLogger } from "../../core/shared/logger.js";
+import { getObjectStore, type ObjectStore } from "../../core/shared/objectStore.js";
 import { createApiKeyMetadataRepository } from "../../core/tenant/api-key-metadata-repository.js";
 import { createApiKeyMetadataService } from "../../core/tenant/api-key-metadata-service.js";
 import { createApiKeyRotationRepository } from "../../core/tenant/api-key-rotation-repository.js";
@@ -56,6 +59,7 @@ export interface BootstrapOptions {
   ) => Promise<AuthenticationRuntime>;
   createRegistrationLimiter?: (config: RegistrationLimiterConfig) => Promise<RegistrationLimiter>;
   createUsersLimiter?: (config: ProtectedUsersLimiterConfig) => Promise<ProtectedUsersLimiter>;
+  getObjectStore?: (rootPath: string) => Promise<ObjectStore>;
   buildApplication?: (options: BuildAppOptions) => ApplicationInstance;
   createCloser?: (
     app: CloseableApplication | undefined,
@@ -78,10 +82,12 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Running
     const registrationLimiter = await acquireRegistrationLimiter(config, options, initialized);
     const usersLimiter = await acquireUsersLimiter(config, options, initialized);
     authentication = await acquireAuthentication(config, database, options);
+    const objectStore = await acquireObjectStore(config, options, initialized);
     const appOptions = applicationOptions(
       config,
       logger,
       database,
+      objectStore,
       authentication,
       registrationLimiter,
       usersLimiter,
@@ -100,6 +106,16 @@ export async function bootstrap(options: BootstrapOptions = {}): Promise<Running
     await closeAfterFailure(close, error, closeUnboundAuth);
     throw error;
   }
+}
+
+async function acquireObjectStore(
+  config: Readonly<AppConfig>,
+  options: BootstrapOptions,
+  initialized: Set<ResourceName>,
+): Promise<ObjectStore> {
+  const store = await (options.getObjectStore ?? getObjectStore)(config.storage.objectStoragePath);
+  initialized.add("objectStore");
+  return store;
 }
 
 function acquireAuthentication(
@@ -142,6 +158,7 @@ function applicationOptions(
   config: Readonly<AppConfig>,
   logger: Logger,
   database: DbPoolResource,
+  objectStore: ObjectStore,
   authentication: AuthenticationRuntime,
   limiter: RegistrationLimiter | undefined,
   usersLimiter: ProtectedUsersLimiter,
@@ -175,6 +192,10 @@ function applicationOptions(
     cloudAccounts: {
       limiter: usersLimiter,
       service: createCloudAccountsService(createCloudAccountsRepository(database.pool), logger),
+    },
+    imports: {
+      limiter: usersLimiter,
+      service: createImportsService(createImportsRepository(database.pool), objectStore, logger),
     },
     ...(config.tenant?.registrationTrustedProxyCidrs
       ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }

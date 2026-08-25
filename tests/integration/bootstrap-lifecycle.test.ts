@@ -9,6 +9,7 @@ function config(nodeEnv: "test" | "production", port = 0): Readonly<AppConfig> {
   return {
     runtime: { nodeEnv, port },
     database: { pool: { connectionTimeoutMillis: 2000 } },
+    storage: { objectStoragePath: ".data/objects" },
     auth: {
       jwtIssuer: "ccpo",
       jwtAudience: "ccpo-ui",

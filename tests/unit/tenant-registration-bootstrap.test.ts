@@ -12,6 +12,7 @@ function config(enabled: boolean): Readonly<AppConfig> {
     runtime: { nodeEnv: "test", port: 0 },
     database: { pool: { connectionTimeoutMillis: 500 } },
     queue: { url: "redis://127.0.0.1:6379" },
+    storage: { objectStoragePath: ".data/objects" },
     tenant: {
       selfRegistrationEnabled: enabled,
       registrationLimiterMode: "redis",
@@ -49,6 +50,16 @@ function logger(): Logger {
   return result;
 }
 
+function objectStore() {
+  return {
+    put: vi.fn(async () => undefined),
+    get: vi.fn(async () => Buffer.from("")),
+    delete: vi.fn(async () => undefined),
+    health: vi.fn(async () => ({ ready: true })),
+    close: vi.fn(async () => undefined),
+  };
+}
+
 function application() {
   return {
     listen: vi.fn(async () => "http://127.0.0.1:4100"),
@@ -64,6 +75,7 @@ it("does not initialize a registration limiter while the route is disabled", asy
     getConfig: async () => config(false),
     getLogger: async () => logger(),
     getDatabase: async () => database(),
+    getObjectStore: async () => objectStore(),
     createRegistrationLimiter,
     buildApplication: () => app,
     createCloser: () => async () => undefined,
@@ -106,6 +118,7 @@ it("wires a healthy limiter, service, and explicit proxy allowlist", async () =>
     getLogger: async () => logger(),
     getDatabase: async () => database(),
     createRegistrationLimiter: async () => limiter,
+    getObjectStore: async () => objectStore(),
     buildApplication: (options) => {
       captured.push(options);
       return app;

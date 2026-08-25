@@ -12,6 +12,7 @@ function config(): Readonly<AppConfig> {
     runtime: { nodeEnv: "test", port: 0 },
     database: { pool: { connectionTimeoutMillis: 500 } },
     queue: { url: "redis://127.0.0.1:6379" },
+    storage: { objectStoragePath: ".data/objects" },
     tenant: {
       selfRegistrationEnabled: false,
       registrationTrustedProxyCidrs: [],
@@ -51,6 +52,16 @@ function logger(): Logger {
     close: async () => undefined,
   };
   return result;
+}
+
+function objectStore() {
+  return {
+    put: vi.fn(async () => undefined),
+    get: vi.fn(async () => Buffer.from("")),
+    delete: vi.fn(async () => undefined),
+    health: vi.fn(async () => ({ ready: true })),
+    close: vi.fn(async () => undefined),
+  };
 }
 
 function application() {
@@ -94,6 +105,7 @@ it("wires one healthy limiter and users service without changing registration pr
     getLogger: async () => logger(),
     getDatabase: async () => database(),
     createUsersLimiter: async () => limiter,
+    getObjectStore: async () => objectStore(),
     buildApplication: (options) => {
       captured.push(options);
       return app;
@@ -107,6 +119,8 @@ it("wires one healthy limiter and users service without changing registration pr
   expect(captured[0]?.apiKeys?.service).toBeDefined();
   expect(captured[0]?.apiKeyRotation?.limiter).toBe(limiter);
   expect(captured[0]?.apiKeyRotation?.service).toBeDefined();
+  expect(captured[0]?.imports?.limiter).toBe(limiter);
+  expect(captured[0]?.imports?.service).toBeDefined();
   expect(captured[0]?.registrationTrustedProxyCidrs).toEqual([]);
   await runtime.close();
 });

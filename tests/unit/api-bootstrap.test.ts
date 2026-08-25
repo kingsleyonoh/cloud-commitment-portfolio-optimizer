@@ -11,6 +11,7 @@ import { expect, it, vi } from "vitest";
 const config = {
   runtime: { nodeEnv: "test", port: 0 },
   database: { pool: { connectionTimeoutMillis: 2000 } },
+  storage: { objectStoragePath: ".data/objects" },
   auth: {
     jwtIssuer: "ccpo",
     jwtAudience: "ccpo-ui",
@@ -41,6 +42,16 @@ function fakeLogger(): Logger {
   return logger;
 }
 
+function fakeObjectStore() {
+  return {
+    put: vi.fn(async () => undefined),
+    get: vi.fn(async () => Buffer.from("")),
+    delete: vi.fn(async () => undefined),
+    health: vi.fn(async () => ({ ready: true })),
+    close: vi.fn(async () => undefined),
+  };
+}
+
 it("closes the constructed app and acquired database after listen failure", async () => {
   const close = vi.fn(async () => undefined);
   const listenFailure = new Error("listen failed");
@@ -56,6 +67,7 @@ it("closes the constructed app and acquired database after listen failure", asyn
       getConfig: async () => config,
       getLogger: async () => fakeLogger(),
       getDatabase: async () => fakeDatabase(),
+      getObjectStore: async () => fakeObjectStore(),
       buildApplication: () => app,
       createCloser: (_app, acquired) => {
         initialized = new Set(acquired);
@@ -65,7 +77,7 @@ it("closes the constructed app and acquired database after listen failure", asyn
   ).rejects.toBe(listenFailure);
 
   expect(initialized).toEqual(
-    new Set<ResourceName>(["environment", "logger", "database", "usersLimiter"]),
+    new Set<ResourceName>(["environment", "logger", "database", "usersLimiter", "objectStore"]),
   );
   expect(close).toHaveBeenCalledTimes(1);
 });
@@ -88,6 +100,7 @@ it("closes session resources when application construction fails before hook own
       getLogger: async () => fakeLogger(),
       getDatabase: async () => fakeDatabase(),
       createAuthentication: async () => authentication,
+      getObjectStore: async () => fakeObjectStore(),
       buildApplication: () => {
         throw failure;
       },
@@ -123,6 +136,7 @@ it("shares the session Argon executor with admin password work", async () => {
     getLogger: async () => fakeLogger(),
     getDatabase: async () => fakeDatabase(),
     createAuthentication: async () => authentication,
+    getObjectStore: async () => fakeObjectStore(),
     buildApplication: (options) => {
       captured.push(options);
       return app;
@@ -167,6 +181,7 @@ it("fails production startup before app construction when the public key is miss
         }) as Readonly<AppConfig>,
       getLogger: async () => fakeLogger(),
       getDatabase: async () => fakeDatabase(),
+      getObjectStore: async () => fakeObjectStore(),
       buildApplication,
       createCloser: (_app, acquired) => {
         initialized = new Set(acquired);
@@ -223,6 +238,7 @@ it("injects the single acquired pool health method and clamps timeout to five se
       }) as Readonly<AppConfig>,
     getLogger: async () => fakeLogger(),
     getDatabase: async () => database,
+    getObjectStore: async () => fakeObjectStore(),
     buildApplication,
     createCloser: () => async () => undefined,
   });
