@@ -89,16 +89,18 @@ async function createImport(
   if (!account.isActive) throw inactiveAccount();
   const bytes = await safeObjectRead(() => objectStore.get(input.objectUri));
   const parseResult =
-    input.source === "aws_cur" && input.format === "csv"
+    input.source === "aws_cur" && (input.format === "csv" || input.format === "native_cur")
       ? parseAwsCurCsvImport(bytes, account.provider, input.controlTotals)
       : input.source === "synthetic" && input.format === "csv"
         ? parseSyntheticCsvImport(bytes, account.provider, input.controlTotals)
-        : await parseCanonicalUsageImport(
-            bytes,
-            account.provider,
-            input.controlTotals,
-            input.format,
-          );
+        : input.format === "native_cur"
+          ? parseAwsCurCsvImport(bytes, account.provider, input.controlTotals)
+          : await parseCanonicalUsageImport(
+              bytes,
+              account.provider,
+              input.controlTotals,
+              input.format,
+            );
   const batch = await safe(() =>
     repository.createImport({
       tenantId: context.tenantId,

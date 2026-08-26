@@ -19,6 +19,7 @@
     "format": "prettier --write \"apps/**/*.ts\" \"core/**/*.ts\" \"scripts/**/*.{ts,mjs}\" \"tests/**/*.{ts,mjs}\" \"*.config.ts\" \"eslint.config.js\" \"prettier.config.mjs\" \"package.json\" \"tsconfig*.json\"",
     "format:check": "prettier --check \"apps/**/*.ts\" \"core/**/*.ts\" \"scripts/**/*.{ts,mjs}\" \"tests/**/*.{ts,mjs}\" \"*.config.ts\" \"eslint.config.js\" \"prettier.config.mjs\" \"package.json\" \"tsconfig*.json\"",
     "fixtures:golden": "zig build -Doptimize=ReleaseSafe && node scripts/validate-economic-kernel-fixtures.mjs",
+    "bench:optimizer": "tsx scripts/bench-optimizer.ts",
     "build:clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run build:clean && tsc -p tsconfig.build.json",
     "test": "vitest run",

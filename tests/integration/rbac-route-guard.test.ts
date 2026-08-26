@@ -7,7 +7,12 @@ import { buildApp } from "../../apps/api/app.js";
 import { runMigrations } from "../../core/db/migrations.js";
 import { createApiKeyCredential } from "../../core/tenant/api-key-credential.js";
 import { createAuthRepository } from "../../core/tenant/auth-repository.js";
-import { AUTH_ACTIONS, type AuthAction } from "../../core/tenant/rbac.js";
+import {
+  AUTH_ACTIONS,
+  API_KEY_ACTION_POLICY,
+  ROLE_ACTION_POLICY,
+  type AuthAction,
+} from "../../core/tenant/rbac.js";
 import { USER_ROLES, type UserRole } from "../../core/tenant/request-context.js";
 import type { Logger } from "../../core/shared/logger.js";
 import { createEphemeralTestToken } from "../helpers/auth-test-tokens.js";
@@ -17,7 +22,7 @@ import {
   type IsolatedDatabase,
 } from "./helpers/postgres-database.js";
 
-const P1_ANALYST = new Set<AuthAction>([
+const API_KEY_ALLOWED = new Set<AuthAction>([
   "tenant_profile.read",
   "cloud_accounts.read",
   "cloud_accounts.create_update",
@@ -28,7 +33,6 @@ const P1_ANALYST = new Set<AuthAction>([
   "forecast_models.write",
   "forecast_runs.read",
   "forecast_runs.run",
-  "optimizer_policies.read",
   "optimizer_runs.read",
   "optimizer_runs.run",
   "recommendations.read",
@@ -36,32 +40,15 @@ const P1_ANALYST = new Set<AuthAction>([
   "reports.read",
   "backtests.read_run",
 ]);
-const P1_ADMIN = new Set<AuthAction>([
-  ...P1_ANALYST,
-  "cloud_accounts.deactivate",
-  "users.read_manage",
-  "api_keys.read_manage",
-  "api_keys.read_rotate",
-  "price_tables.create_activate",
-  "optimizer_policies.write",
-  "recommendations.approve_reject",
-  "approvals.read",
-  "tenant_settings.write",
-]);
-const API_KEY_ALLOWED = new Set<AuthAction>(
-  [...P1_ANALYST].filter((action) => action !== "optimizer_policies.read"),
+const expectedByRole = USER_ROLES.reduce(
+  (result, role) => {
+    result[role] = new Set<AuthAction>(
+      AUTH_ACTIONS.filter((action) => ROLE_ACTION_POLICY[role][action] === "allow_p1"),
+    );
+    return result;
+  },
+  {} as Record<UserRole, ReadonlySet<AuthAction>>,
 );
-const expectedByRole: Record<UserRole, ReadonlySet<AuthAction>> = {
-  tenant_admin: P1_ADMIN,
-  finops_analyst: P1_ANALYST,
-  finance_approver: new Set<AuthAction>([
-    "recommendations.read",
-    "recommendations.approve_reject",
-    "approvals.read",
-    "backtests.read_run",
-  ]),
-  read_only_auditor: new Set(["backtests.read_run"]),
-};
 
 let database: IsolatedDatabase | undefined;
 let pool: Pool;
@@ -199,7 +186,7 @@ it("enforces every API-key overlay cell without analyst-role inheritance", async
       url: probeUrl(action),
       headers: { "x-api-key": apiKey },
     });
-    const allowed = API_KEY_ALLOWED.has(action);
+    const allowed = API_KEY_ACTION_POLICY[action] === "allow_p1" && API_KEY_ALLOWED.has(action);
     expect(response.statusCode, action).toBe(allowed ? 200 : 403);
     expect(response.json().error?.code, action).toBe(allowed ? undefined : "FORBIDDEN");
   }

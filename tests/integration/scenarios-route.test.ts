@@ -148,7 +148,9 @@ describe("/api/scenarios", () => {
     expect(page.body).toContain("Scenario workbench");
     expect(page.body).toContain('aria-label="Scenario status summary"');
     expect(page.body).toContain('name="shock_config"');
-    expect(page.body).not.toMatch(/<script|api_token|tenant_id|password|secret|authorization|Bearer/iu);
+    expect(page.body).not.toMatch(
+      /<script|api_token|tenant_id|password|secret|authorization|Bearer/iu,
+    );
 
     const created = await harness.app.inject({
       method: "POST",

@@ -89,34 +89,45 @@ const expectedActions = matrix.actions.flatMap((action) =>
   action === "api_keys.read_rotate" ? ["api_keys.read_manage", action] : [action],
 );
 
+const IMPLEMENTED_PHASE_2_ACTIONS: Record<UserRole, ReadonlySet<AuthAction>> = {
+  tenant_admin: new Set([
+    "scenarios.read_write",
+    "recommendations.request_approval",
+    "recommendations.approve_reject",
+    "approvals.read",
+    "reports.read",
+    "backtests.read_run",
+    "audit_log.read",
+    "notifications.read",
+    "notification_preferences.write",
+    "ecosystem_adapters.configure",
+  ]),
+  finops_analyst: new Set([
+    "scenarios.read_write",
+    "recommendations.request_approval",
+    "backtests.read_run",
+    "notifications.read",
+    "notification_preferences.write",
+  ]),
+  finance_approver: new Set([
+    "scenarios.read_write",
+    "recommendations.read",
+    "recommendations.approve_reject",
+    "approvals.read",
+    "backtests.read_run",
+    "notifications.read",
+    "notification_preferences.write",
+  ]),
+  read_only_auditor: new Set([
+    "scenarios.read_write",
+    "backtests.read_run",
+    "audit_log.read",
+    "notifications.read",
+  ]),
+};
+
 function expectedRoleDecision(role: UserRole, action: AuthAction): PolicyDecision {
-  if (
-    role === "tenant_admin" &&
-    (action === "recommendations.request_approval" ||
-      action === "recommendations.approve_reject" ||
-      action === "approvals.read" ||
-      action === "backtests.read_run")
-  ) {
-    return "allow_p1";
-  }
-  if (
-    role === "finops_analyst" &&
-    (action === "recommendations.request_approval" || action === "backtests.read_run")
-  ) {
-    return "allow_p1";
-  }
-  if (
-    role === "finance_approver" &&
-    (action === "recommendations.read" ||
-      action === "recommendations.approve_reject" ||
-      action === "approvals.read" ||
-      action === "backtests.read_run")
-  ) {
-    return "allow_p1";
-  }
-  if (role === "read_only_auditor" && action === "backtests.read_run") {
-    return "allow_p1";
-  }
+  if (IMPLEMENTED_PHASE_2_ACTIONS[role].has(action)) return "allow_p1";
   const canonical = action === "api_keys.read_manage" ? "api_keys.read_rotate" : action;
   const index = matrix.actions.indexOf(canonical);
   return expectedDecision(matrix.rows.get(role)![index]!);

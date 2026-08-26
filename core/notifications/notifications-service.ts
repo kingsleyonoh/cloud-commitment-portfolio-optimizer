@@ -205,11 +205,7 @@ function renderTemplatePart(template: string, event: NotificationEvent): string 
   );
   if (/\{\{/u.test(rendered)) throw renderFailed();
   const normalized = rendered.normalize("NFC").trim();
-  if (
-    !normalized ||
-    normalized.length > 10000 ||
-    hasControlCharacters(normalized)
-  ) {
+  if (!normalized || normalized.length > 10000 || hasControlCharacters(normalized)) {
     throw renderFailed();
   }
   return normalized;

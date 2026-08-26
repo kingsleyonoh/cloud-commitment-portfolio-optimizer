@@ -41,6 +41,9 @@ const allMigrationFilenames = [
   "0020_create_report_snapshots.sql",
   "0021_create_approvals.sql",
   "0022_create_backtest_runs.sql",
+  "0023_create_ecosystem_events.sql",
+  "0024_create_notifications.sql",
+  "0025_create_notification_preferences.sql",
 ] as const;
 const acceptedHashes = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -100,7 +103,7 @@ describe("production registration-request migration runner and CLI", () => {
     }
   });
 
-  it("applies the current plan through 0022, re-applies unchanged, and creates zero rows", async () => {
+  it("applies the current plan through 0025, re-applies unchanged, and creates zero rows", async () => {
     const database = await freshDatabase("ccpo_registration_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -129,9 +132,9 @@ describe("production registration-request migration runner and CLI", () => {
     const first = await execFileAsync(process.execPath, command, options);
     const second = await execFileAsync(process.execPath, command, options);
 
-    expect(first.stdout).toContain("Migrations complete: 22 applied, 0 unchanged.");
+    expect(first.stdout).toContain("Migrations complete: 25 applied, 0 unchanged.");
     expect(first.stdout).toContain("applied 0013_create_price_table_items.sql");
-    expect(second.stdout).toContain("Migrations complete: 0 applied, 22 unchanged.");
+    expect(second.stdout).toContain("Migrations complete: 0 applied, 25 unchanged.");
     expect(first.stderr).toBe("");
     expect(second.stderr).toBe("");
     expect((await readCounts(database.url))?.registration_requests).toBe("0");

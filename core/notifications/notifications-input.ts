@@ -121,9 +121,7 @@ function safeText(value: unknown, max: number): value is string {
   if (typeof value !== "string") return false;
   const normalized = value.normalize("NFC").trim();
   return (
-    normalized.length > 0 &&
-    [...normalized].length <= max &&
-    !hasControlCharacters(normalized)
+    normalized.length > 0 && [...normalized].length <= max && !hasControlCharacters(normalized)
   );
 }
 

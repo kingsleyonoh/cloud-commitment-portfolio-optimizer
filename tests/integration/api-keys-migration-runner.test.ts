@@ -97,9 +97,9 @@ describe("production API-keys migration runner and CLI", () => {
     const first = await execFileAsync(process.execPath, command, options);
     const second = await execFileAsync(process.execPath, command, options);
 
-    expect(first.stdout).toContain("Migrations complete: 22 applied, 0 unchanged.");
+    expect(first.stdout).toContain("Migrations complete: 25 applied, 0 unchanged.");
     expect(first.stdout).toContain("applied 0013_create_price_table_items.sql");
-    expect(second.stdout).toContain("Migrations complete: 0 applied, 22 unchanged.");
+    expect(second.stdout).toContain("Migrations complete: 0 applied, 25 unchanged.");
     expect(first.stderr).toBe("");
     expect(second.stderr).toBe("");
     expect(await readCounts(database.url)).toEqual({ tenants: "0", users: "0", api_keys: "0" });

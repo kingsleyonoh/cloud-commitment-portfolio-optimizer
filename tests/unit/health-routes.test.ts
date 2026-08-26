@@ -17,12 +17,16 @@ function silentLogger(): Logger {
   return logger;
 }
 
-function createApp(databaseProbe = vi.fn(async () => ({ ready: true }))) {
+function createApp(
+  databaseProbe = vi.fn(async () => ({ ready: true })),
+  objectStoreProbe?: () => Promise<{ ready: boolean; code?: string }>,
+) {
   const app = buildApp({
     logger: silentLogger(),
     genReqId: () => "generated-health-id",
     databaseProbe,
     databaseTimeoutMs: 25,
+    ...(objectStoreProbe ? { objectStoreProbe } : {}),
   });
   apps.push(app);
   return { app, databaseProbe };
@@ -96,5 +100,37 @@ describe("health routes", () => {
     expect(elapsedMs).toBeGreaterThanOrEqual(15);
     expect(elapsedMs).toBeLessThan(250);
     expect(databaseProbe).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports database and object-store readiness without exposing dependency codes", async () => {
+    const databaseProbe = vi.fn(async () => ({ ready: true }));
+    const objectStoreProbe = vi.fn(async () => ({ ready: true }));
+    const { app } = createApp(databaseProbe, objectStoreProbe);
+
+    const response = await app.inject({ method: "GET", url: "/health/ready" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: "ok",
+      dependencies: { database: "ok", object_store: "ok" },
+    });
+    expect(databaseProbe).toHaveBeenCalledTimes(1);
+    expect(objectStoreProbe).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 503 when an injected readiness dependency is unavailable", async () => {
+    const { app } = createApp(
+      vi.fn(async () => ({ ready: true })),
+      vi.fn(async () => ({ ready: false, code: "OBJECT_STORE_PRIVATE_CODE" })),
+    );
+
+    const response = await app.inject({ method: "GET", url: "/health/ready" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      status: "unavailable",
+      dependencies: { database: "ok", object_store: "unavailable" },
+    });
+    expect(response.body).not.toContain("PRIVATE_CODE");
   });
 });

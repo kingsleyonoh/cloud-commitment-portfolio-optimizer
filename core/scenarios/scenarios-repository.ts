@@ -5,7 +5,11 @@ import type { ScenarioCreateInput, ScenarioListInput, ScenarioRecord } from "./s
 export interface ScenariosRepository {
   list(tenantId: string, input: ScenarioListInput): Promise<ScenarioRecord[]>;
   get(tenantId: string, id: string): Promise<ScenarioRecord | null>;
-  create(tenantId: string, createdByUserId: string, input: ScenarioCreateInput): Promise<ScenarioRecord>;
+  create(
+    tenantId: string,
+    createdByUserId: string,
+    input: ScenarioCreateInput,
+  ): Promise<ScenarioRecord>;
 }
 
 interface ScenarioRow extends QueryResultRow {
@@ -33,7 +37,11 @@ export function createScenariosRepository(pool: Pool): ScenariosRepository {
   };
 }
 
-async function list(pool: Pool, tenantId: string, input: ScenarioListInput): Promise<ScenarioRecord[]> {
+async function list(
+  pool: Pool,
+  tenantId: string,
+  input: ScenarioListInput,
+): Promise<ScenarioRecord[]> {
   const result = await pool.query<ScenarioRow>(
     `SELECT ${PROJECTION}
        FROM scenarios
@@ -42,7 +50,13 @@ async function list(pool: Pool, tenantId: string, input: ScenarioListInput): Pro
         AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
       ORDER BY created_at DESC, id DESC
       LIMIT $5`,
-    [tenantId, input.status ?? null, input.cursor?.createdAt ?? null, input.cursor?.id ?? null, input.limit + 1],
+    [
+      tenantId,
+      input.status ?? null,
+      input.cursor?.createdAt ?? null,
+      input.cursor?.id ?? null,
+      input.limit + 1,
+    ],
   );
   return result.rows.map(freezeRow);
 }
@@ -66,7 +80,14 @@ async function create(
        (tenant_id, name, description, base_forecast_run_id, shock_config, created_by_user_id)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
      RETURNING id`,
-    [tenantId, input.name, input.description ?? null, input.baseForecastRunId ?? null, JSON.stringify(input.shockConfig), createdByUserId],
+    [
+      tenantId,
+      input.name,
+      input.description ?? null,
+      input.baseForecastRunId ?? null,
+      JSON.stringify(input.shockConfig),
+      createdByUserId,
+    ],
   );
   return (await get(pool, tenantId, result.rows[0]!.id))!;
 }

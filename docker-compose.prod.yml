@@ -1,6 +1,4 @@
-# Security-bounded production topology scaffold only.
-# The app build/start, app health, migration gate, and worker runtime contracts are intentionally
-# deferred until their owning phases; this file is not deployment-readiness evidence.
+# Security-bounded production topology for the API, migration gate, worker, and local dependencies.
 services:
   postgres:
     image: postgres:16-alpine
@@ -45,6 +43,29 @@ services:
           memory: 512M
           pids: 100
 
+  migrate:
+    build: .
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    command: ["node", "dist/scripts/db-migrate.js"]
+    environment:
+      NODE_ENV: production
+      DATABASE_REGION: ${DATABASE_REGION:?DATABASE_REGION is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+          pids: 100
+
   app:
     build: .
     restart: unless-stopped
@@ -87,8 +108,70 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
+    volumes:
+      - app_objects:/app/.data
+      - ${JWT_PRIVATE_KEY_PATH:?JWT_PRIVATE_KEY_PATH is required}:/run/config/jwt-private.pem:ro
+      - ${JWT_PUBLIC_KEY_PATH:?JWT_PUBLIC_KEY_PATH is required}:/run/config/jwt-public.pem:ro
+    tmpfs:
+      - /tmp
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 200
+
+  worker:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    command: ["node", "dist/apps/worker/server.js"]
+    environment:
+      NODE_ENV: production
+      PUBLIC_BASE_URL: ${APP_PUBLIC_URL:?APP_PUBLIC_URL is required}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required}
+      DEPLOYMENT_REGION: ${DEPLOYMENT_REGION:?DEPLOYMENT_REGION is required}
+      DATABASE_REGION: ${DATABASE_REGION:?DATABASE_REGION is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DB_POOL_MAX: ${DB_POOL_MAX:?DB_POOL_MAX is required}
+      DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:?DB_POOL_IDLE_TIMEOUT_MS is required}
+      DB_POOL_CONNECTION_TIMEOUT_MS: ${DB_POOL_CONNECTION_TIMEOUT_MS:?DB_POOL_CONNECTION_TIMEOUT_MS is required}
+      REDIS_URL: redis://redis:6379
+      OBJECT_STORAGE_MODE: local
+      OBJECT_STORAGE_PATH: /app/.data/objects
+      REPORT_STORAGE_PATH: /app/.data/reports
+      PRICE_FIXTURE_PATH: /app/tests/fixtures/pricing
+      JWT_PUBLIC_KEY_PATH: /run/config/jwt-public.pem
+      JWT_PRIVATE_KEY_PATH: /run/config/jwt-private.pem
+      JWT_ISSUER: ${JWT_ISSUER:?JWT_ISSUER is required}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?JWT_AUDIENCE is required}
+      AUTH_LIMITER_MODE: redis
+      AUTH_COOKIE_SECURE: "true"
+      USERS_LIMITER_MODE: redis
+      NOTIFICATION_HUB_ENABLED: ${NOTIFICATION_HUB_ENABLED:-false}
+      NOTIFICATION_HUB_URL: ${NOTIFICATION_HUB_URL:-http://notification-hub:3847}
+      NOTIFICATION_HUB_API_KEY: ${NOTIFICATION_HUB_API_KEY:-}
+      WORKFLOW_ENGINE_ENABLED: ${WORKFLOW_ENGINE_ENABLED:-false}
+      WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL:-https://workflows.kingsleyonoh.com}
+      WORKFLOW_ENGINE_API_KEY: ${WORKFLOW_ENGINE_API_KEY:-}
+      WORKFLOW_APPROVAL_WORKFLOW_ID: ${WORKFLOW_APPROVAL_WORKFLOW_ID:-}
+      INVOICE_RECON_ENABLED: false
+      INVOICE_RECON_CONTRACT_VERIFIED: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - app_objects:/app/.data
       - ${JWT_PRIVATE_KEY_PATH:?JWT_PRIVATE_KEY_PATH is required}:/run/config/jwt-private.pem:ro

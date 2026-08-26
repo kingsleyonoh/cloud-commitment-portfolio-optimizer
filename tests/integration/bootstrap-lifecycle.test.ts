@@ -69,8 +69,10 @@ describe("running API lifecycle", () => {
       expect(runtime.host).toBe("127.0.0.1");
       expect(runtime.port).toBeGreaterThan(0);
       const response = await fetch(`http://${runtime.host}:${runtime.port}/`);
-      expect(response.status).toBe(404);
-      expect(await response.text()).toContain("<h1>Page not found</h1>");
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("Cloud Commitment Portfolio Optimizer");
+      expect(body).toContain("Run a 12-month replay");
     } finally {
       const first = runtime.close();
       const second = runtime.close();

@@ -74,10 +74,18 @@ test("production dependencies are internal, persistent, healthy, restartable, an
   assert.equal(config.services.postgres.restart, "unless-stopped");
   assert.equal(config.services.redis.restart, "unless-stopped");
   assert.equal(config.services.app.restart, "unless-stopped");
+  assert.equal(config.services.worker.restart, "unless-stopped");
+  assert.equal(config.services.migrate.restart, undefined);
+  assert.equal(config.services.migrate.command.join(" "), "node dist/scripts/db-migrate.js");
+  assert.equal(config.services.app.depends_on.migrate.condition, "service_completed_successfully");
+  assert.equal(
+    config.services.worker.depends_on.migrate.condition,
+    "service_completed_successfully",
+  );
   assert.ok(config.services.redis.volumes.some((volume) => volume.target === "/data"));
   assert.ok(config.volumes.redis_data);
 
-  for (const serviceName of ["postgres", "redis", "app"]) {
+  for (const serviceName of ["postgres", "redis", "app", "worker", "migrate"]) {
     const limits = config.services[serviceName].deploy?.resources?.limits;
     assert.ok(limits?.cpus, `${serviceName} CPU limit missing`);
     assert.ok(limits?.memory, `${serviceName} memory limit missing`);
@@ -139,15 +147,21 @@ test("Dockerfile and package scripts share the exact TypeScript application buil
   assert.match(dockerfile, /zig-x86_64-linux-\$\{ZIG_VERSION\}\.tar\.xz/u);
   assert.match(
     dockerfile,
-    /TypeScript build\/start and the Zig package artifact boundary are active/iu,
+    /TypeScript application\/migration build and the Zig package artifact boundary are active/iu,
   );
-  assert.match(dockerfile, /Deployment readiness remains deferred/iu);
   assert.match(dockerfile, /CMD \["node", "dist\/apps\/api\/server\.js"\]/u);
   assert.equal(packageJson.scripts.build, "npm run build:clean && tsc -p tsconfig.build.json");
   assert.equal(buildConfig.compilerOptions.outDir, "dist");
-  assert.deepEqual(buildConfig.include, ["apps/**/*.ts", "core/**/*.ts", "types/**/*.d.ts"]);
+  assert.deepEqual(buildConfig.include, [
+    "apps/**/*.ts",
+    "core/**/*.ts",
+    "scripts/**/*.ts",
+    "types/**/*.d.ts",
+  ]);
   assert.match(zigBuild, /\.name = "cloud-commitment-optimizer"/u);
   assert.match(zigBuild, /installArtifact\(executable\)/u);
   assert.match(dockerfile, /RUN zig build -Doptimize=ReleaseSafe/u);
   assert.match(dockerfile, /COPY --from=build \/app\/zig-out \.\/zig-out/u);
+  assert.match(dockerfile, /COPY --from=build \/app\/core\/reports\/templates/u);
+  assert.match(dockerfile, /COPY --from=build \/app\/core\/notifications\/templates/u);
 });

@@ -88,10 +88,13 @@ it("emits only runtime TypeScript modules to Docker's exact server path", async 
     sourceMap: false,
     declaration: false,
   });
-  expect(config.include).toEqual(["apps/**/*.ts", "core/**/*.ts", "types/**/*.d.ts"]);
-  expect(config.exclude).toEqual(
-    expect.arrayContaining(["tests", "scripts", "node_modules", "dist"]),
-  );
+  expect(config.include).toEqual([
+    "apps/**/*.ts",
+    "core/**/*.ts",
+    "scripts/**/*.ts",
+    "types/**/*.d.ts",
+  ]);
+  expect(config.exclude).toEqual(expect.arrayContaining(["tests", "node_modules", "dist"]));
   expect(dockerfile).toContain('CMD ["node", "dist/apps/api/server.js"]');
 });
 
@@ -105,6 +108,7 @@ it("creates the exact built executable without emitting tests or config", async 
   await expect(stat("dist/apps/api/server.js")).resolves.toBeDefined();
   await expect(stat("dist/apps/worker/server.js")).resolves.toBeDefined();
   await expect(stat("dist/tests")).rejects.toMatchObject({ code: "ENOENT" });
-  await expect(stat("dist/scripts")).rejects.toMatchObject({ code: "ENOENT" });
+  await expect(stat("dist/scripts/db-migrate.js")).resolves.toBeDefined();
+  await expect(stat("dist/scripts/setup.js")).resolves.toBeDefined();
   await expect(stat("dist/playwright.config.js")).rejects.toMatchObject({ code: "ENOENT" });
 }, 60_000);

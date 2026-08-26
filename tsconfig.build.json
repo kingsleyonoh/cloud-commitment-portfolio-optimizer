@@ -8,14 +8,6 @@
     "sourceMap": false,
     "declaration": false
   },
-  "include": ["apps/**/*.ts", "core/**/*.ts", "types/**/*.d.ts"],
-  "exclude": [
-    "tests",
-    "scripts",
-    "node_modules",
-    "dist",
-    "coverage",
-    "playwright-report",
-    "test-results"
-  ]
+  "include": ["apps/**/*.ts", "core/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["tests", "node_modules", "dist", "coverage", "playwright-report", "test-results"]
 }

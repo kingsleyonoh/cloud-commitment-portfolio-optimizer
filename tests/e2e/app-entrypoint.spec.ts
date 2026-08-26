@@ -62,16 +62,24 @@ test("built application users route returns safe 401 without credential material
   expect(JSON.stringify(result)).not.toMatch(/(?:authorization|bearer|apiKey|key_hash|token)/iu);
 });
 
-test("built application root is an accessible script-free product 404", async ({
+test("built application root is an accessible script-free product overview", async ({
   page,
 }, testInfo) => {
   const traffic = captureTraffic(page);
   const response = await page.goto(server.url, { waitUntil: "networkidle" });
 
-  expect(response?.status()).toBe(404);
-  await expect(page).toHaveTitle("Page not found | Cloud Commitment Portfolio Optimizer");
+  expect(response?.status()).toBe(200);
+  await expect(page).toHaveTitle(
+    "Cloud Commitment Portfolio Optimizer | Buy commitments like a portfolio",
+  );
   await expect(page.locator("main")).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Page not found" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Buy cloud commitments like a portfolio, not a spreadsheet guess.",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("Run a 12-month replay", { exact: true }).first()).toBeVisible();
   await expect(page.locator("script")).toHaveCount(0);
   await expect(page.locator("[hx-get], [hx-post], [hx-boost]")).toHaveCount(0);
   expect(unexpectedConsoleErrors(traffic)).toEqual([]);
@@ -96,7 +104,7 @@ function captureTraffic(page: Page): Traffic {
 
 async function writeEvidence(page: Page, testInfo: TestInfo, traffic: Traffic): Promise<void> {
   const root = resolve(process.env.APP_E2E_EVIDENCE_DIR ?? ".tmp/playwright-evidence/app");
-  const screenshot = resolve(root, "app-root-404.png");
+  const screenshot = resolve(root, "app-root-overview.png");
   const summary = resolve(root, "console-network.json");
   await mkdir(dirname(screenshot), { recursive: true });
   await page.screenshot({ path: screenshot, fullPage: true });

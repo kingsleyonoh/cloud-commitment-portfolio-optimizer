@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from "fastify";
 import { renderErrorPage } from "../web/error-page.js";
+import {
+  createTraceContext,
+  formatTraceparent,
+  type TraceContext,
+} from "../../core/observability/trace-context.js";
+import { registerLandingRoute } from "./routes/landing.js";
 import { registerAuditLogRoutes, type AuditLogRuntime } from "./routes/audit-log.js";
 import { AppError, normalizeError, toErrorEnvelope } from "../../core/shared/errors.js";
 import type { Logger } from "../../core/shared/logger.js";
@@ -46,6 +52,7 @@ export interface BuildAppOptions {
   logger: Logger;
   databaseProbe: DatabaseProbe;
   databaseTimeoutMs: number;
+  objectStoreProbe?: () => Promise<{ ready: boolean; code?: string }>;
   genReqId?: () => string;
   authentication?: AuthenticationRuntime;
   protectedRoutes?: (app: FastifyInstance) => void | Promise<void>;
@@ -110,6 +117,7 @@ function createFastify(options: BuildAppOptions): FastifyInstance {
 }
 
 function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOptions): void {
+  registerLandingRoute(app);
   if (options.tenantRegistration) registerTenantRegistrationRoute(app, options.tenantRegistration);
   if (options.authentication) {
     void app.register(authPlugin, {
@@ -258,22 +266,35 @@ function validationError(kind: RequestKind): AppError {
 }
 
 function registerRequestLifecycle(app: FastifyInstance, logger: Logger): void {
+  const traces = new WeakMap<object, TraceContext>();
   app.addHook("onRequest", async (request, reply) => {
+    const trace = createTraceContext(headerValue(request.headers.traceparent));
+    traces.set(request, trace);
+    reply.header("traceparent", formatTraceparent(trace));
     reply.headers({ ...SECURITY_HEADERS, "x-request-id": request.id });
     await logger.info("http.request.started", {
       requestId: request.id,
       method: request.method,
       path: request.routeOptions.url ?? "unmatched",
+      trace_id: trace.traceId,
+      span_id: trace.spanId,
     });
   });
   app.addHook("onResponse", async (request, reply) => {
+    const trace = traces.get(request);
     await logger.info("http.request.completed", {
       requestId: request.id,
       method: request.method,
       path: request.routeOptions.url ?? "unmatched",
       statusCode: reply.statusCode,
+      trace_id: trace?.traceId,
+      span_id: trace?.spanId,
     });
   });
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function prefersJson(request: FastifyRequest): boolean {

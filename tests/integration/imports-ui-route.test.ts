@@ -71,11 +71,17 @@ describe("/imports UI", () => {
     expect(response.body).toContain("IMPORT_SCHEMA_DRIFT");
     expect(response.body).toContain("lineItem/UnblendedCost");
     expect(response.body).toContain("Desktop upload path");
+    expect(response.body).toContain("Before you upload or share");
+    expect(response.body).toContain(
+      "Do not upload access keys, passwords, tokens, or other credentials.",
+    );
+    expect(response.body).toContain("redact them before sharing with support");
+    expect(response.body).toContain('data-privacy-consent="billing-export"');
     expect(response.body).not.toContain("imports/synthetic/list-warning.csv");
     expect(response.body).not.toContain("imports/aws/raw-quarantine.csv");
     expect(response.body).not.toContain("imports/synthetic/hidden-tenant.csv");
     expect(response.body).not.toMatch(
-      /<script|raw_row|raw_file|key_hash|password|authorization|Bearer/iu,
+      /<script|raw_row|raw_file|key_hash|api_token|secret_value|BEGIN [A-Z ]+ PRIVATE KEY|Bearer [A-Za-z0-9._-]{20,}/iu,
     );
   });
 

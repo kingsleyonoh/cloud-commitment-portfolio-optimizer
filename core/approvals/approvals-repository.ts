@@ -18,11 +18,7 @@ export interface ApprovalsRepository {
   reject(tenantId: string, input: ApprovalDecisionInput): Promise<ApprovalRecord | null>;
   getRecommendation(tenantId: string, id: string): Promise<RecommendationRecord | null>;
   expireDue(now: Date, limit: number): Promise<ApprovalExpiryResult>;
-  setWorkflowExecutionId(
-    tenantId: string,
-    approvalId: string,
-    executionId: string,
-  ): Promise<void>;
+  setWorkflowExecutionId(tenantId: string, approvalId: string, executionId: string): Promise<void>;
 }
 
 interface ApprovalRow extends QueryResultRow {

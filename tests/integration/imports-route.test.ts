@@ -583,17 +583,54 @@ describe("POST /api/imports Phase 2 source-format matrix", () => {
     ]);
   });
 
-  it("keeps native CUR export unavailable until its Phase 3 owner", async () => {
-    const response = await postImport({
+  it("imports native CUR export through the canonical AWS CUR parser boundary", async () => {
+    await putFixtureObject(
+      harness,
+      "imports/aws/native-cur.csv",
+      resolve("tests/fixtures/aws/cur-valid.csv"),
+    );
+    const response = await postImport(
+      {
+        source: "aws_cur",
+        format: "native_cur",
+        object_uri: "imports/aws/native-cur.csv",
+        cloud_account_id: harness.accountA,
+        control_totals: [
+          {
+            provider: "aws",
+            service_code: "AmazonEC2",
+            region: "us-east-1",
+            month: "2026-03",
+            line_count: "2",
+            usage_quantity: "4.00000000",
+            on_demand_cost_cents: "8",
+            realized_cost_cents: "5",
+            commitment_applied_cents: "3",
+          },
+          {
+            provider: "aws",
+            service_code: "AmazonS3",
+            region: "us-east-1",
+            month: "2026-03",
+            line_count: "1",
+            usage_quantity: "3.00000000",
+            on_demand_cost_cents: "9",
+            realized_cost_cents: "7",
+            commitment_applied_cents: "2",
+          },
+        ],
+      },
+      { "x-api-key": harness.analystApiKey },
+    );
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
       source: "aws_cur",
       format: "native_cur",
-      object_uri: "imports/aws/native-cur.json",
-      cloud_account_id: harness.accountA,
-      control_totals: [],
+      status: "completed",
+      schema_version: "aws_cur_native_cur:v1",
+      line_count: "3",
     });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error.code).toBe("VALIDATION_ERROR");
   });
 });
 
@@ -665,7 +702,7 @@ describe("GET /api/imports", () => {
       "limit=0",
       "status=queued%00",
       "source=oracle_export",
-      "format=native_cur",
+      "format=invalid_format",
       "unknown=value",
     ]) {
       const response = await harness.app.inject({

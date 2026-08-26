@@ -44,7 +44,7 @@ export function registerScenariosRoutes(app: FastifyInstance, runtime: Scenarios
     "/api/scenarios",
     {
       bodyLimit: 1024 * 1024,
-      preHandler: protectedBoundary(app, runtime, "POST", "/api/scenarios", "scenarios.read_write"),
+      preHandler: scenarioMutationBoundary(app, runtime, "POST", "/api/scenarios"),
       schema: {
         body: scenarioCreateBodySchema,
         response: { 201: scenarioSchema, ...scenariosResponseSchemas },
@@ -105,7 +105,7 @@ function registerScenarioPages(app: FastifyInstance, runtime: ScenariosRuntime):
     "/scenarios",
     {
       bodyLimit: 32 * 1024,
-      preHandler: protectedBoundary(app, runtime, "POST", "/api/scenarios", "scenarios.read_write"),
+      preHandler: scenarioMutationBoundary(app, runtime, "POST", "/api/scenarios"),
     },
     async (request, reply) => {
       await runtime.service.create(
@@ -137,6 +137,26 @@ function registerScenarioPages(app: FastifyInstance, runtime: ScenariosRuntime):
         .send(renderScenarioDetailPage({ scenario, role: context.role }));
     },
   );
+}
+
+function scenarioMutationBoundary(
+  app: FastifyInstance,
+  runtime: ScenariosRuntime,
+  method: ProtectedUsersMethod,
+  route: ProtectedUsersRoute,
+): preHandlerHookHandler[] {
+  return [
+    ...protectedBoundary(app, runtime, method, route, "scenarios.read_write"),
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      if (
+        context.actorType !== "user" ||
+        (context.role !== "tenant_admin" && context.role !== "finops_analyst")
+      ) {
+        return reply.code(403).send(toErrorEnvelope(authError("FORBIDDEN")));
+      }
+    },
+  ];
 }
 
 function registerFormParser(app: FastifyInstance): void {

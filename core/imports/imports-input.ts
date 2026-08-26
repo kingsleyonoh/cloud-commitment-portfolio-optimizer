@@ -129,11 +129,12 @@ function parseSource(value: unknown): ImportSource {
   return value;
 }
 
-function parseFormat(value: unknown): Exclude<ImportFormat, "native_cur"> {
+function parseFormat(value: unknown): ImportFormat {
   if (
     value !== "csv" &&
     value !== "parquet" &&
     value !== "json_api_snapshot" &&
+    value !== "native_cur" &&
     value !== "manual_override"
   ) {
     throw invalid();
@@ -141,14 +142,12 @@ function parseFormat(value: unknown): Exclude<ImportFormat, "native_cur"> {
   return value;
 }
 
-function parseCreateFormat(value: unknown): Exclude<ImportFormat, "native_cur"> {
+function parseCreateFormat(value: unknown): ImportFormat {
   return parseFormat(value);
 }
 
-function isAllowedSourceFormat(
-  source: ImportSource,
-  format: Exclude<ImportFormat, "native_cur">,
-): boolean {
+function isAllowedSourceFormat(source: ImportSource, format: ImportFormat): boolean {
+  if (format === "native_cur") return source === "aws_cur";
   if (format === "manual_override") return source === "synthetic";
   if (source === "synthetic") {
     return format === "csv" || format === "parquet" || format === "json_api_snapshot";

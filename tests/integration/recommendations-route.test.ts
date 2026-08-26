@@ -553,9 +553,10 @@ async function createRecommendation(
   const run = await harness.pool.query<{ id: string }>(
     `INSERT INTO optimizer_runs
        (tenant_id, forecast_run_id, optimizer_policy_id, provider, instrument,
-        price_table_version_ids, random_seed, input_snapshot_uri, output_uri, frontier_uri, status)
+        price_table_version_ids, random_seed, input_snapshot_uri, output_uri, frontier_uri, status,
+        created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6::uuid[], 20260826,
-             $7, $8, $9, 'queued')
+             $7, $8, $9, 'queued', statement_timestamp(), statement_timestamp())
      RETURNING id`,
     [
       tenantId,

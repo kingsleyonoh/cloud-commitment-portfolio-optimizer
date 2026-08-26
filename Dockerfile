@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# TypeScript build/start and the Zig package artifact boundary are active.
-# Deployment readiness remains deferred to its separately owned work.
+# TypeScript application/migration build and the Zig package artifact boundary are active.
 
 FROM node:22-alpine AS node-deps
 WORKDIR /app
@@ -39,6 +38,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/zig-out ./zig-out
 COPY --from=build /app/db ./db
+COPY --from=build /app/tests/fixtures ./tests/fixtures
+COPY --from=build /app/core/reports/templates ./dist/core/reports/templates
+COPY --from=build /app/core/notifications/templates ./dist/core/notifications/templates
 USER app
 EXPOSE 8080
 CMD ["node", "dist/apps/api/server.js"]

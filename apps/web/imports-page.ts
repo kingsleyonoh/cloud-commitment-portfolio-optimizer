@@ -60,6 +60,15 @@ ${renderImportsTable(options.imports)}
 <li>AWS CUR CSV maps provider billing columns into canonical usage rows.</li>
 <li>Quarantined imports keep diagnostics without exposing raw billing rows in the browser.</li>
 </ol>
+<section class="notice" aria-labelledby="privacy-guidance" data-privacy-consent="billing-export">
+<h3 id="privacy-guidance">Before you upload or share</h3>
+<ul>
+<li>Upload billing exports only for this tenant and purpose.</li>
+<li>Do not upload access keys, passwords, tokens, or other credentials.</li>
+<li>Provider exports can contain account IDs and resource tags; redact them before sharing with support.</li>
+<li>Optional ecosystem adapters require explicit enablement in Integrations.</li>
+</ul>
+</section>
 </aside>
 </div>
 </main>

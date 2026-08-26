@@ -227,6 +227,7 @@ function applicationOptions(
     logger,
     databaseProbe: () => database.health(),
     databaseTimeoutMs: Math.min(config.database.pool.connectionTimeoutMillis, 5000),
+    objectStoreProbe: () => objectStore.health(),
     authentication,
     tenantProfile: {
       service: createTenantProfileService(createTenantProfileRepository(database.pool)),

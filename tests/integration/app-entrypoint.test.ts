@@ -25,7 +25,7 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-it("returns accessible branded HTML 404s with request IDs and safe headers", async () => {
+it("returns the public product overview with request IDs and safe headers", async () => {
   const app = buildApp({
     logger: silentLogger(),
     genReqId: () => "request-root",
@@ -35,14 +35,16 @@ it("returns accessible branded HTML 404s with request IDs and safe headers", asy
 
   const response = await app.inject({ method: "GET", url: "/" });
 
-  expect(response.statusCode).toBe(404);
+  expect(response.statusCode).toBe(200);
   expect(response.headers["content-type"]).toContain("text/html");
   expect(response.headers["x-request-id"]).toBe("request-root");
   expect(response.headers["cache-control"]).toBe("no-store");
   expect(response.headers["x-content-type-options"]).toBe("nosniff");
   expect(response.headers["content-security-policy"]).toContain("default-src 'none'");
   expect(response.body).toContain("<main");
-  expect(response.body).toContain("<h1>Page not found</h1>");
+  expect(response.body).toContain("Buy cloud commitments like a portfolio");
+  expect(response.body).toContain("Run a 12-month replay");
+  expect(response.body).toContain('data-conversion-event="landing_cta_clicked"');
   expect(response.body).toContain("Cloud Commitment Portfolio Optimizer");
   expect(response.body).not.toMatch(/<script\b/iu);
   expect(response.body).not.toMatch(/(?:src|href)=["']https?:/iu);

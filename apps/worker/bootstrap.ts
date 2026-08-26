@@ -15,6 +15,7 @@ import { getJobQueue, type JobQueue } from "../../core/shared/jobQueue.js";
 import type { Logger } from "../../core/shared/logger.js";
 import { getLogger } from "../../core/shared/logger.js";
 import { getObjectStore, type ObjectStore } from "../../core/shared/objectStore.js";
+import { measureQueueLag } from "../../core/observability/queue-lag.js";
 import { buildWorker, type BuildWorkerOptions, type WorkerApplication } from "./app.js";
 import { createWorkerRuntimeCloser, type WorkerResourceName } from "./resources.js";
 
@@ -58,6 +59,8 @@ export async function bootstrapWorker(
     worker = (options.buildApplication ?? buildWorker)({
       queue,
       logger,
+      pollIntervalMs: 1000,
+      queueLagProbe: () => measureQueueLag(database.pool),
       forecasts: createForecastWorker(createForecastRepository(database.pool), objectStore, {
         minHistoryDays: config.forecasting.minHistoryDays,
       }),
