@@ -43,8 +43,8 @@ for (const [name, mutate] of [
     ({ manifest }) => (manifest.cli_contract_version = "v2"),
   ],
   [
-    "manifest rejects implemented economics",
-    ({ manifest }) => (manifest.economics_state = "implemented"),
+    "manifest rejects deferred economics",
+    ({ manifest }) => (manifest.economics_state = "not_implemented"),
   ],
   [
     "manifest rejects another fixture contract",
@@ -59,7 +59,7 @@ for (const [name, mutate] of [
     ({ manifest }) => (manifest.formula_owner.prd_ref = "5.4"),
   ],
   [
-    "manifest rejects a nondeferred formula status",
+    "manifest rejects a nonimplemented formula status",
     ({ manifest }) => (manifest.formula_owner.status = "ready"),
   ],
   ["manifest rejects missing required IDs", ({ manifest }) => manifest.required_case_ids.pop()],
@@ -69,7 +69,7 @@ for (const [name, mutate] of [
   ["case rejects unknown fields", ({ cases }) => (cases[0].extra = "x")],
   ["case rejects malformed IDs", ({ cases }) => (cases[0].case_id = "Bad ID")],
   ["case rejects another version", ({ cases }) => (cases[0].case_version = "v2")],
-  ["case rejects computed expected values", ({ cases }) => (cases[0].expected = { net: "1" })],
+  ["case rejects missing expected values", ({ cases }) => (cases[0].expected = null)],
   ["case rejects another operation", ({ cases }) => (cases[0].operation = "recommend")],
   ["case rejects unknown oracle fields", ({ cases }) => (cases[0].oracle.extra = "x")],
   ["case rejects another oracle owner", ({ cases }) => (cases[0].oracle.owner = "other")],

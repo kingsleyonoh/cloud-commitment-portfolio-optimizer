@@ -6,9 +6,9 @@ import { canonicalStringify } from "./economic-kernel-fixture-contract.mjs";
 export function verifyCliBoundary(corpus, commandSpec) {
   const contractResult = run(commandSpec, request("contract", "fixture-contract", {}));
   const expected = {
-    capabilities: ["contract", "validate", "evaluate_reserved"],
+    capabilities: ["contract", "validate", "evaluate"],
     contract_version: "economic-kernel-cli/v1",
-    economics_status: "not_implemented",
+    economics_status: "implemented",
     numeric_encoding: "canonical_decimal_strings",
     ok: true,
     package_version: "0.1.0",
@@ -25,7 +25,7 @@ function verifyCase(commandSpec, fixtureCase) {
     contract_version: "economic-kernel-cli/v1",
     ok: true,
     request_id: fixtureCase.case_id,
-    validation: { economics_computed: false, schema_valid: true },
+    validation: { economics_computed: true, schema_valid: true },
   };
   expectProcess(validateResult, 0, `${canonicalStringify(expectedValidate)}\n`, "validate");
   verifyEvaluate(commandSpec, fixtureCase, payload);
@@ -37,14 +37,11 @@ function verifyEvaluate(commandSpec, fixtureCase, payload) {
   const second = run(commandSpec, evaluateRequest);
   const expected = {
     contract_version: "economic-kernel-cli/v1",
-    error: {
-      code: "NOT_IMPLEMENTED",
-      message: "Economic kernel operations are not implemented.",
-    },
-    ok: false,
+    evaluation: fixtureCase.expected,
+    ok: true,
     request_id: fixtureCase.case_id,
   };
-  expectProcess(first, 3, `${canonicalStringify(expected)}\n`, "evaluate");
+  expectProcess(first, 0, `${canonicalStringify(expected)}\n`, "evaluate");
   assert.deepEqual(second, first, "evaluate must be byte-identical across runs");
 }
 

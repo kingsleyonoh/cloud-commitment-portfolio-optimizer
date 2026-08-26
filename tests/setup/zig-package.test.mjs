@@ -32,16 +32,16 @@ test("Zig package installs the versioned optimizer CLI at the Docker-compatible 
   assert.ok(existsSync(executable), `${executable} was not installed`);
 });
 
-test("CLI exposes contract and schema-only validation without economic output", () => {
+test("CLI exposes contract and implemented economic evaluation", () => {
   const contract = runCli(
     '{"command":"contract","contract_version":"economic-kernel-cli/v1","payload":{},"request_id":"contract-smoke"}\n',
   );
   assert.equal(contract.status, 0, contract.stderr);
   assert.equal(contract.stderr, "");
   assert.deepEqual(JSON.parse(contract.stdout), {
-    capabilities: ["contract", "validate", "evaluate_reserved"],
+    capabilities: ["contract", "validate", "evaluate"],
     contract_version: "economic-kernel-cli/v1",
-    economics_status: "not_implemented",
+    economics_status: "implemented",
     numeric_encoding: "canonical_decimal_strings",
     ok: true,
     package_version: "0.1.0",
@@ -49,19 +49,27 @@ test("CLI exposes contract and schema-only validation without economic output", 
   });
 });
 
-test("reserved evaluate is stable, escaped, silent, and exits three", () => {
-  const input =
-    String.raw`{"command":"evaluate","contract_version":"economic-kernel-cli/v1","payload":{},"request_id":"quote-\"-safe"}` +
-    "\n";
+test("evaluate is stable, escaped, silent, and returns expected cents", async () => {
+  const fixtureCase = JSON.parse(
+    (await readFile("tests/fixtures/economic_kernel/cases.v1.ndjson", "utf8")).split("\n")[0],
+  );
+  const input = `${JSON.stringify({
+    command: "evaluate",
+    contract_version: "economic-kernel-cli/v1",
+    payload: { case: fixtureCase },
+    request_id: 'quote-"-safe',
+  })}\n`;
   const first = runCli(input);
   const second = runCli(input);
-  const expected =
-    String.raw`{"contract_version":"economic-kernel-cli/v1","error":{"code":"NOT_IMPLEMENTED","message":"Economic kernel operations are not implemented."},"ok":false,"request_id":"quote-\"-safe"}` +
-    "\n";
 
-  assert.equal(first.status, 3);
+  assert.equal(first.status, 0);
   assert.equal(first.stderr, "");
-  assert.equal(first.stdout, expected);
+  assert.deepEqual(JSON.parse(first.stdout), {
+    contract_version: "economic-kernel-cli/v1",
+    evaluation: fixtureCase.expected,
+    ok: true,
+    request_id: 'quote-"-safe',
+  });
   assert.equal(second.stdout, first.stdout);
 });
 

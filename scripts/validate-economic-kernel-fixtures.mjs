@@ -22,7 +22,7 @@ if (!existsSync(executable)) {
 try {
   const corpus = await loadAndValidateCorpus(fixtureDirectory);
   verifyCliBoundary(corpus, { command: executable });
-  process.stdout.write(`validated ${corpus.cases.length} deferred economic-kernel fixtures\n`);
+  process.stdout.write(`validated ${corpus.cases.length} implemented economic-kernel fixtures\n`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }

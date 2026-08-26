@@ -35,15 +35,15 @@ async function rejectsTamper(name, mutate, pattern) {
   });
 }
 
-test("corpus has five sorted deterministic cases with explicitly deferred oracles", async () => {
+test("corpus has five sorted deterministic cases with implemented expected values", async () => {
   const corpus = await loadAndValidateCorpus(fixtureDirectory);
   const ids = corpus.cases.map((fixtureCase) => fixtureCase.case_id);
 
   assert.equal(corpus.cases.length, 5);
   assert.deepEqual(ids, [...ids].sort());
   for (const fixtureCase of corpus.cases) {
-    assert.equal(fixtureCase.expected, null);
-    assert.equal(fixtureCase.oracle.status, "deferred_to_formula_item");
+    assert.equal(typeof fixtureCase.expected.net_savings_cents, "string");
+    assert.equal(fixtureCase.oracle.status, "implemented");
     assert.equal(fixtureCase.operation, "evaluate");
   }
 });
@@ -83,7 +83,11 @@ await rejectsTamper(
 await rejectsTamper(
   "validator rejects fake expected values",
   ({ casesBytes, manifestBytes }) => ({
-    casesBytes: replaceOnce(casesBytes, '"expected":null', '"expected":{"net_savings_cents":"1"}'),
+    casesBytes: replaceOnce(
+      casesBytes,
+      '"net_savings_cents":"40000"',
+      '"net_savings_cents":"40001"',
+    ),
     manifestBytes,
   }),
   /expected/u,
@@ -91,7 +95,7 @@ await rejectsTamper(
 await rejectsTamper(
   "validator rejects placeholder ambiguity",
   ({ casesBytes, manifestBytes }) => ({
-    casesBytes: replaceOnce(casesBytes, '"deferred_to_formula_item"', '"placeholder"'),
+    casesBytes: replaceOnce(casesBytes, '"implemented"', '"placeholder"'),
     manifestBytes,
   }),
   /oracle|ambiguous/u,
@@ -135,5 +139,5 @@ test("fixtures command explicitly builds and validates the installed real CLI wi
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.deepEqual(after, before);
   assert.match(result.stdout, /zig build -Doptimize=ReleaseSafe/u);
-  assert.match(result.stdout, /validated 5 deferred economic-kernel fixtures/u);
+  assert.match(result.stdout, /validated 5 implemented economic-kernel fixtures/u);
 });

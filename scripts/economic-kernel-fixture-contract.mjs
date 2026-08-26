@@ -39,6 +39,14 @@ const INPUT_KEYS = [
   "upfront_cost_cents",
 ];
 const ORACLE_KEYS = ["owner", "prd_ref", "status"];
+const EXPECTED_KEYS = [
+  "downside_loss_cents",
+  "gross_savings_cents",
+  "liquidity_penalty_cents",
+  "net_savings_cents",
+  "unused_waste_cents",
+  "upfront_amortization_cents",
+];
 const MANIFEST_KEYS = [
   "cases_file",
   "cli_contract_version",
@@ -51,7 +59,7 @@ const MANIFEST_KEYS = [
 const OWNER = {
   owner: "phase1-zig-economic-kernel-formulas-rounding",
   prd_ref: "5.5",
-  status: "deferred_to_formula_item",
+  status: "implemented",
 };
 
 export function canonicalStringify(value) {
@@ -140,7 +148,7 @@ function validateManifest(manifest) {
   exactKeys(manifest, MANIFEST_KEYS, "manifest");
   assert.equal(manifest.cases_file, "cases.v1.ndjson");
   assert.equal(manifest.cli_contract_version, "economic-kernel-cli/v1");
-  assert.equal(manifest.economics_state, "not_implemented");
+  assert.equal(manifest.economics_state, "implemented");
   assert.equal(manifest.fixture_contract_version, "economic-kernel-fixtures/v1");
   assert.deepEqual(manifest.formula_owner, OWNER);
   assert.deepEqual(manifest.required_case_ids, CASE_IDS);
@@ -155,7 +163,7 @@ function validateCase(fixtureCase) {
   exactKeys(fixtureCase, CASE_KEYS, `case ${fixtureCase.case_id}`);
   assert.match(fixtureCase.case_id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
   assert.equal(fixtureCase.case_version, "economic-kernel-case/v1");
-  assert.equal(fixtureCase.expected, null, `${fixtureCase.case_id} expected must remain null`);
+  validateExpected(fixtureCase.expected);
   assert.equal(fixtureCase.operation, "evaluate");
   exactKeys(fixtureCase.oracle, ORACLE_KEYS, "oracle");
   assert.deepEqual(fixtureCase.oracle, OWNER, `${fixtureCase.case_id} oracle must be explicit`);
@@ -163,6 +171,11 @@ function validateCase(fixtureCase) {
   validateInputs(fixtureCase.inputs);
   validateUnits(fixtureCase.units);
   validateCoverageClass(fixtureCase);
+  assert.deepEqual(
+    fixtureCase.expected,
+    computeExpected(fixtureCase),
+    "expected formula output mismatch",
+  );
 }
 
 function validateDimensions(dimensions) {
@@ -192,6 +205,48 @@ function validateInputs(inputs) {
   for (const key of INPUT_KEYS) decimalString(inputs[key], key === "term_months");
 }
 
+function validateExpected(expected) {
+  exactKeys(expected, EXPECTED_KEYS, "expected");
+  for (const key of EXPECTED_KEYS) decimalString(expected[key], false, { signed: true });
+}
+
+function computeExpected(fixtureCase) {
+  if (fixtureCase.dimensions.instrument === "no_action") {
+    return {
+      downside_loss_cents: "0",
+      gross_savings_cents: "0",
+      liquidity_penalty_cents: "0",
+      net_savings_cents: "0",
+      unused_waste_cents: "0",
+      upfront_amortization_cents: "0",
+    };
+  }
+  const input = fixtureCase.inputs;
+  const gross = BigInt(input.on_demand_cost_cents) - BigInt(input.commitment_effective_cost_cents);
+  const unused =
+    BigInt(input.committed_capacity_cents) > BigInt(input.eligible_usage_cents)
+      ? BigInt(input.committed_capacity_cents) - BigInt(input.eligible_usage_cents)
+      : 0n;
+  const upfront = divRoundHalfUp(BigInt(input.upfront_cost_cents), BigInt(input.term_months));
+  const liquidity = divRoundHalfUp(
+    BigInt(input.upfront_cost_cents) * BigInt(input.liquidity_penalty_bps),
+    10_000n,
+  );
+  const net = gross - unused - upfront - liquidity;
+  return {
+    downside_loss_cents: net < 0n ? (-net).toString() : "0",
+    gross_savings_cents: gross.toString(),
+    liquidity_penalty_cents: liquidity.toString(),
+    net_savings_cents: net.toString(),
+    unused_waste_cents: unused.toString(),
+    upfront_amortization_cents: upfront.toString(),
+  };
+}
+
+function divRoundHalfUp(numerator, denominator) {
+  return (numerator + denominator / 2n) / denominator;
+}
+
 function validateUnits(units) {
   exactKeys(units, INPUT_KEYS, "units");
   for (const key of INPUT_KEYS) {
@@ -205,11 +260,11 @@ function validateUnits(units) {
   }
 }
 
-function decimalString(value, positive) {
+function decimalString(value, positive, options = {}) {
   assert.equal(typeof value, "string", "numeric inputs must be strings");
   assert.match(
     value,
-    /^(?:0|[1-9][0-9]*)$/u,
+    options.signed ? /^-?(?:0|[1-9][0-9]*)$/u : /^(?:0|[1-9][0-9]*)$/u,
     "numeric strings must be canonical non-negative integers",
   );
   if (positive) assert.notEqual(value, "0", "count must be positive");

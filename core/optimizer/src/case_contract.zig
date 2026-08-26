@@ -5,6 +5,7 @@ const case_keys = [_][]const u8{ "case_id", "case_version", "dimensions", "expec
 const dimension_keys = [_][]const u8{ "instrument", "payment_option", "provider", "region", "tenant_reporting_currency", "term_months" };
 const input_keys = [_][]const u8{ "commitment_effective_cost_cents", "committed_capacity_cents", "eligible_usage_cents", "liquidity_penalty_bps", "on_demand_cost_cents", "term_months", "upfront_cost_cents" };
 const oracle_keys = [_][]const u8{ "owner", "prd_ref", "status" };
+const expected_keys = [_][]const u8{ "downside_loss_cents", "gross_savings_cents", "liquidity_penalty_cents", "net_savings_cents", "unused_waste_cents", "upfront_amortization_cents" };
 
 pub fn validate(value: std.json.Value) bool {
     if (!json.exactObject(value, &case_keys)) return false;
@@ -12,7 +13,7 @@ pub fn validate(value: std.json.Value) bool {
     return validIdentifier(stringField(object, "case_id")) and
         equals(stringField(object, "case_version"), "economic-kernel-case/v1") and
         validDimensions(object.get("dimensions").?) and
-        object.get("expected").? == .null and
+        validExpected(object.get("expected").?) and
         validInputs(object.get("inputs").?) and
         equals(stringField(object, "operation"), "evaluate") and
         validOracle(object.get("oracle").?) and
@@ -44,7 +45,16 @@ fn validOracle(value: std.json.Value) bool {
     const object = value.object;
     return equals(stringField(object, "owner"), "phase1-zig-economic-kernel-formulas-rounding") and
         equals(stringField(object, "prd_ref"), "5.5") and
-        equals(stringField(object, "status"), "deferred_to_formula_item");
+        equals(stringField(object, "status"), "implemented");
+}
+
+fn validExpected(value: std.json.Value) bool {
+    if (!json.exactObject(value, &expected_keys)) return false;
+    const object = value.object;
+    for (expected_keys) |key| {
+        if (!signedDecimal(stringField(object, key), false)) return false;
+    }
+    return true;
 }
 
 fn validUnits(value: std.json.Value) bool {
@@ -72,6 +82,17 @@ fn decimal(value: ?[]const u8, positive: bool) bool {
     if (text.len == 0 or (text.len > 1 and text[0] == '0')) return false;
     if (positive and std.mem.eql(u8, text, "0")) return false;
     for (text) |character| if (character < '0' or character > '9') return false;
+    return true;
+}
+
+fn signedDecimal(value: ?[]const u8, positive: bool) bool {
+    const text = value orelse return false;
+    if (text.len == 0) return false;
+    const start: usize = if (text[0] == '-') 1 else 0;
+    if (start == text.len) return false;
+    if (text.len - start > 1 and text[start] == '0') return false;
+    if (positive and std.mem.eql(u8, text[start..], "0")) return false;
+    for (text[start..]) |character| if (character < '0' or character > '9') return false;
     return true;
 }
 

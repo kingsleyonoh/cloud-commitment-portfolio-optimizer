@@ -4,7 +4,7 @@ const json = @import("json_contract.zig");
 
 pub const contract_version = "economic-kernel-cli/v1";
 pub const package_version = "0.1.0";
-pub const economics_status = "not_implemented";
+pub const economics_status = "implemented";
 
 pub const Outcome = struct {
     stdout: []u8,
@@ -56,29 +56,94 @@ fn validate(allocator: std.mem.Allocator, request_id: []const u8, payload: std.j
     errdefer output.deinit();
     try output.writer().writeAll("{\"contract_version\":\"economic-kernel-cli/v1\",\"ok\":true,\"request_id\":");
     try std.json.stringify(request_id, .{}, output.writer());
-    try output.writer().writeAll(",\"validation\":{\"economics_computed\":false,\"schema_valid\":true}}\n");
+    try output.writer().writeAll(",\"validation\":{\"economics_computed\":true,\"schema_valid\":true}}\n");
     return .{ .stdout = try output.toOwnedSlice(), .exit_code = 0 };
 }
 
 fn evaluate(allocator: std.mem.Allocator, request_id: []const u8, payload: std.json.Value) !Outcome {
-    const empty = json.exactObject(payload, &.{});
-    const with_case = json.exactObject(payload, case_payload_keys) and cases.validate(payload.object.get("case").?);
-    if (!empty and !with_case) return invalid(allocator, "INVALID_REQUEST");
+    if (!json.exactObject(payload, case_payload_keys)) return invalid(allocator, "INVALID_REQUEST");
+    const case = payload.object.get("case").?;
+    if (!cases.validate(case)) return invalid(allocator, "INVALID_REQUEST");
+    const evaluation = compute(case) catch return invalid(allocator, "INVALID_REQUEST");
     var output = std.ArrayList(u8).init(allocator);
     errdefer output.deinit();
-    try output.writer().writeAll("{\"contract_version\":\"economic-kernel-cli/v1\",\"error\":{\"code\":\"NOT_IMPLEMENTED\",\"message\":\"Economic kernel operations are not implemented.\"},\"ok\":false,\"request_id\":");
+    try output.writer().print("{{\"contract_version\":\"economic-kernel-cli/v1\",\"evaluation\":{{\"downside_loss_cents\":\"{d}\",\"gross_savings_cents\":\"{d}\",\"liquidity_penalty_cents\":\"{d}\",\"net_savings_cents\":\"{d}\",\"unused_waste_cents\":\"{d}\",\"upfront_amortization_cents\":\"{d}\"}},\"ok\":true,\"request_id\":", .{
+        evaluation.downside_loss_cents,
+        evaluation.gross_savings_cents,
+        evaluation.liquidity_penalty_cents,
+        evaluation.net_savings_cents,
+        evaluation.unused_waste_cents,
+        evaluation.upfront_amortization_cents,
+    });
     try std.json.stringify(request_id, .{}, output.writer());
     try output.writer().writeAll("}\n");
-    return .{ .stdout = try output.toOwnedSlice(), .exit_code = 3 };
+    return .{ .stdout = try output.toOwnedSlice(), .exit_code = 0 };
 }
 
 fn successContract(allocator: std.mem.Allocator, request_id: []const u8) !Outcome {
     var output = std.ArrayList(u8).init(allocator);
     errdefer output.deinit();
-    try output.writer().writeAll("{\"capabilities\":[\"contract\",\"validate\",\"evaluate_reserved\"],\"contract_version\":\"economic-kernel-cli/v1\",\"economics_status\":\"not_implemented\",\"numeric_encoding\":\"canonical_decimal_strings\",\"ok\":true,\"package_version\":\"0.1.0\",\"request_id\":");
+    try output.writer().writeAll("{\"capabilities\":[\"contract\",\"validate\",\"evaluate\"],\"contract_version\":\"economic-kernel-cli/v1\",\"economics_status\":\"implemented\",\"numeric_encoding\":\"canonical_decimal_strings\",\"ok\":true,\"package_version\":\"0.1.0\",\"request_id\":");
     try std.json.stringify(request_id, .{}, output.writer());
     try output.writer().writeAll("}\n");
     return .{ .stdout = try output.toOwnedSlice(), .exit_code = 0 };
+}
+
+const Evaluation = struct {
+    downside_loss_cents: i128,
+    gross_savings_cents: i128,
+    liquidity_penalty_cents: i128,
+    net_savings_cents: i128,
+    unused_waste_cents: i128,
+    upfront_amortization_cents: i128,
+};
+
+fn compute(case: std.json.Value) !Evaluation {
+    const object = case.object;
+    const dimensions = object.get("dimensions").?.object;
+    const inputs = object.get("inputs").?.object;
+    if (std.mem.eql(u8, stringField(dimensions, "instrument"), "no_action")) {
+        return .{
+            .downside_loss_cents = 0,
+            .gross_savings_cents = 0,
+            .liquidity_penalty_cents = 0,
+            .net_savings_cents = 0,
+            .unused_waste_cents = 0,
+            .upfront_amortization_cents = 0,
+        };
+    }
+    const on_demand_cost_cents = try integerField(inputs, "on_demand_cost_cents");
+    const commitment_effective_cost_cents = try integerField(inputs, "commitment_effective_cost_cents");
+    const committed_capacity_cents = try integerField(inputs, "committed_capacity_cents");
+    const eligible_usage_cents = try integerField(inputs, "eligible_usage_cents");
+    const upfront_cost_cents = try integerField(inputs, "upfront_cost_cents");
+    const term_months = try integerField(inputs, "term_months");
+    const liquidity_penalty_bps = try integerField(inputs, "liquidity_penalty_bps");
+    const gross_savings_cents = on_demand_cost_cents - commitment_effective_cost_cents;
+    const unused_waste_cents = @max(@as(i128, 0), committed_capacity_cents - eligible_usage_cents);
+    const upfront_amortization_cents = divRoundHalfUp(upfront_cost_cents, term_months);
+    const liquidity_penalty_cents = divRoundHalfUp(upfront_cost_cents * liquidity_penalty_bps, 10_000);
+    const net_savings_cents = gross_savings_cents - unused_waste_cents - upfront_amortization_cents - liquidity_penalty_cents;
+    return .{
+        .downside_loss_cents = @max(@as(i128, 0), -net_savings_cents),
+        .gross_savings_cents = gross_savings_cents,
+        .liquidity_penalty_cents = liquidity_penalty_cents,
+        .net_savings_cents = net_savings_cents,
+        .unused_waste_cents = unused_waste_cents,
+        .upfront_amortization_cents = upfront_amortization_cents,
+    };
+}
+
+fn integerField(object: std.json.ObjectMap, key: []const u8) !i128 {
+    return std.fmt.parseInt(i128, stringField(object, key), 10);
+}
+
+fn stringField(object: std.json.ObjectMap, key: []const u8) []const u8 {
+    return object.get(key).?.string;
+}
+
+fn divRoundHalfUp(numerator: i128, denominator: i128) i128 {
+    return @divTrunc(numerator + @divTrunc(denominator, 2), denominator);
 }
 
 fn invalid(allocator: std.mem.Allocator, code: []const u8) !Outcome {
