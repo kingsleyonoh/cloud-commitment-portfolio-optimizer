@@ -17,6 +17,7 @@ import {
   recommendationsListResponseSchema,
   recommendationsResponseSchemas,
 } from "./recommendations-schema.js";
+import { renderRecommendationDetailPage } from "../../web/recommendation-detail-page.js";
 
 export interface RecommendationsRuntime {
   limiter: ProtectedUsersLimiter;
@@ -27,6 +28,32 @@ export function registerRecommendationsRoutes(
   app: FastifyInstance,
   runtime: RecommendationsRuntime,
 ): void {
+  app.get<{ Params: { id: string } }>(
+    "/recommendations/:id",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/recommendations/{id}",
+        "recommendations.read",
+      ),
+      schema: {
+        params: recommendationPathSchema,
+      },
+    },
+    async (request, reply) => {
+      const detail = await runtime.service.get(
+        requestContext(request.authContext),
+        request.params.id,
+      );
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderRecommendationDetailPage(detail));
+    },
+  );
+
   app.get<{ Querystring: Record<string, unknown> }>(
     "/api/recommendations",
     {
