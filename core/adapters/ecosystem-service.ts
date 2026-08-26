@@ -78,7 +78,6 @@ export function createEcosystemAdaptersService(
         input.approvalId,
         input.tenantId,
         {
-          workflow_id: config.workflowEngine.approvalWorkflowId,
           approval_id: input.approvalId,
           ...input.payload,
         },

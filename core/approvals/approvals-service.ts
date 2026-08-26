@@ -27,6 +27,8 @@ export interface ApprovalsService {
 export interface ApprovalsServiceOptions {
   expiryHours: number;
   now?: () => Date;
+  onApprovalRequested?: (input: { tenantId: string; approval: ApprovalRecord }) => Promise<void>;
+  onApprovalDecided?: (input: { tenantId: string; approval: ApprovalRecord }) => Promise<void>;
 }
 
 export function createApprovalsService(
@@ -36,11 +38,21 @@ export function createApprovalsService(
   const now = options.now ?? (() => new Date());
   return {
     requestApproval: (context, id, body) =>
-      requestApproval(repository, options.expiryHours, now, context, id, body),
+      requestApproval(
+        repository,
+        options.expiryHours,
+        now,
+        options.onApprovalRequested,
+        context,
+        id,
+        body,
+      ),
     list: (context, query) => list(repository, context, query),
     get: (context, id) => get(repository, context, id),
-    approve: (context, id, body) => decide(repository, context, id, body, "approve"),
-    reject: (context, id, body) => decide(repository, context, id, body, "reject"),
+    approve: (context, id, body) =>
+      decide(repository, options.onApprovalDecided, context, id, body, "approve"),
+    reject: (context, id, body) =>
+      decide(repository, options.onApprovalDecided, context, id, body, "reject"),
   };
 }
 
@@ -48,6 +60,7 @@ async function requestApproval(
   repository: ApprovalsRepository,
   expiryHours: number,
   now: () => Date,
+  onApprovalRequested: ApprovalsServiceOptions["onApprovalRequested"],
   context: RequestContext,
   id: unknown,
   body: unknown,
@@ -63,6 +76,7 @@ async function requestApproval(
       expiresAt,
     }),
   );
+  await runHook(onApprovalRequested, { tenantId: context.tenantId, approval: row });
   return toApproval(row);
 }
 
@@ -98,6 +112,7 @@ async function get(
 
 async function decide(
   repository: ApprovalsRepository,
+  onApprovalDecided: ApprovalsServiceOptions["onApprovalDecided"],
   context: RequestContext,
   idValue: unknown,
   body: unknown,
@@ -114,7 +129,20 @@ async function decide(
     repository.getRecommendation(context.tenantId, approval.recommendationId),
   );
   if (!recommendation) throw notFound();
+  await runHook(onApprovalDecided, { tenantId: context.tenantId, approval });
   return { approval: toApproval(approval), recommendation: toRecommendation(recommendation) };
+}
+
+async function runHook(
+  hook: ((input: { tenantId: string; approval: ApprovalRecord }) => Promise<void>) | undefined,
+  input: { tenantId: string; approval: ApprovalRecord },
+): Promise<void> {
+  if (!hook) return;
+  try {
+    await hook(input);
+  } catch {
+    // Optional notification and adapter mirrors never make local approval state unavailable.
+  }
 }
 
 function toApproval(row: ApprovalRecord): Approval {

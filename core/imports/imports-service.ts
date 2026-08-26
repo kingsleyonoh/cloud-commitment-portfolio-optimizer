@@ -20,13 +20,19 @@ export interface ImportsService {
   get(context: RequestContext, importBatchId: unknown): Promise<ImportBatch>;
 }
 
+export interface ImportsServiceOptions {
+  onImportProcessed?: (input: { tenantId: string; batch: ImportBatchRecord }) => Promise<void>;
+}
+
 export function createImportsService(
   repository: ImportsRepository,
   objectStore: ObjectStore,
   logger: Logger,
+  options: ImportsServiceOptions = {},
 ): ImportsService {
   return {
-    create: (context, body) => createImport(repository, objectStore, logger, context, body),
+    create: (context, body) =>
+      createImport(repository, objectStore, logger, options.onImportProcessed, context, body),
     list: (context, query) => listImports(repository, context, query),
     get: (context, importBatchId) => getImport(repository, context, importBatchId),
   };
@@ -71,6 +77,7 @@ async function createImport(
   repository: ImportsRepository,
   objectStore: ObjectStore,
   logger: Logger,
+  onImportProcessed: ImportsServiceOptions["onImportProcessed"],
   context: RequestContext,
   body: unknown,
 ): Promise<ImportBatch> {
@@ -100,8 +107,21 @@ async function createImport(
       parseResult,
     }),
   );
+  await runHook(onImportProcessed, { tenantId: context.tenantId, batch });
   await logImport(logger, context, batch);
   return toImportBatch(batch);
+}
+
+async function runHook(
+  hook: ImportsServiceOptions["onImportProcessed"],
+  input: { tenantId: string; batch: ImportBatchRecord },
+): Promise<void> {
+  if (!hook) return;
+  try {
+    await hook(input);
+  } catch {
+    // Optional notifications and adapter mirrors never make local import state unavailable.
+  }
 }
 
 function toImportBatch(row: ImportBatchRecord): ImportBatch {

@@ -1,4 +1,6 @@
 import type { AddressInfo } from "node:net";
+import type { ApprovalRecord } from "../../core/approvals/approvals-types.js";
+import type { EcosystemAdaptersService } from "../../core/adapters/ecosystem-service.js";
 import type { AppConfig } from "../../core/config/env.js";
 import { createApprovalsRepository } from "../../core/approvals/approvals-repository.js";
 import { createApprovalsService } from "../../core/approvals/approvals-service.js";
@@ -8,6 +10,7 @@ import { createDashboardRepository } from "../../core/dashboard/dashboard-reposi
 import { createDashboardService } from "../../core/dashboard/dashboard-service.js";
 import { createImportsRepository } from "../../core/imports/imports-repository.js";
 import { createImportsService } from "../../core/imports/imports-service.js";
+import type { ImportBatchRecord } from "../../core/imports/imports-types.js";
 import { createForecastRepository } from "../../core/forecasting/forecast-repository.js";
 import { createForecastService } from "../../core/forecasting/forecast-service.js";
 import { createOptimizerPoliciesRepository } from "../../core/optimizer-policies/optimizer-policies-repository.js";
@@ -16,6 +19,7 @@ import { createOptimizerRunsRepository } from "../../core/optimizer-runs/optimiz
 import { createOptimizerRunsService } from "../../core/optimizer-runs/optimizer-runs-service.js";
 import { createNotificationsRepository } from "../../core/notifications/notifications-repository.js";
 import { createNotificationsService } from "../../core/notifications/notifications-service.js";
+import type { NotificationsService } from "../../core/notifications/notifications-service.js";
 import { createEcosystemEventsRepository } from "../../core/adapters/ecosystem-repository.js";
 import { createEcosystemAdaptersService } from "../../core/adapters/ecosystem-service.js";
 import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
@@ -190,7 +194,35 @@ function applicationOptions(
   usersLimiter: ProtectedUsersLimiter,
 ): BuildAppOptions {
   const approvalsRepository = createApprovalsRepository(database.pool);
+  const importsRepository = createImportsRepository(database.pool);
   const ecosystemRepository = createEcosystemEventsRepository(database.pool);
+  const notificationsService = createNotificationsService(
+    createNotificationsRepository(database.pool),
+  );
+  const integrationsService = createEcosystemAdaptersService(
+    ecosystemRepository,
+    config.integrations,
+    undefined,
+    (tenantId, approvalId, executionId) =>
+      approvalsRepository.setWorkflowExecutionId(tenantId, approvalId, executionId),
+  );
+  const approvalsService = createApprovalsService(approvalsRepository, {
+    expiryHours: config.approvals?.expiryHours ?? 168,
+    onApprovalRequested: ({ tenantId, approval }) =>
+      emitApprovalRequestedEvents(
+        notificationsService,
+        integrationsService,
+        config.runtime.publicBaseUrl,
+        tenantId,
+        approval,
+      ),
+    onApprovalDecided: ({ tenantId, approval }) =>
+      emitApprovalDecidedNotification(notificationsService, tenantId, approval),
+  });
+  const importsService = createImportsService(importsRepository, objectStore, logger, {
+    onImportProcessed: ({ tenantId, batch }) =>
+      emitImportProcessedEvents(notificationsService, integrationsService, tenantId, batch),
+  });
   return {
     logger,
     databaseProbe: () => database.health(),
@@ -226,7 +258,7 @@ function applicationOptions(
     },
     imports: {
       limiter: usersLimiter,
-      service: createImportsService(createImportsRepository(database.pool), objectStore, logger),
+      service: importsService,
     },
     priceTables: {
       limiter: usersLimiter,
@@ -258,9 +290,7 @@ function applicationOptions(
     },
     approvals: {
       limiter: usersLimiter,
-      service: createApprovalsService(approvalsRepository, {
-        expiryHours: config.approvals?.expiryHours ?? 168,
-      }),
+      service: approvalsService,
     },
     backtests: {
       limiter: usersLimiter,
@@ -271,17 +301,11 @@ function applicationOptions(
     },
     notifications: {
       limiter: usersLimiter,
-      service: createNotificationsService(createNotificationsRepository(database.pool)),
+      service: notificationsService,
     },
     integrations: {
       limiter: usersLimiter,
-      service: createEcosystemAdaptersService(
-        ecosystemRepository,
-        config.integrations,
-        undefined,
-        (tenantId, approvalId, executionId) =>
-          approvalsRepository.setWorkflowExecutionId(tenantId, approvalId, executionId),
-      ),
+      service: integrationsService,
     },
     scenarios: {
       limiter: usersLimiter,
@@ -314,6 +338,138 @@ function registrationRuntime(
       service: createTenantRegistrationService(database.pool, config.tenant.apiKeyPrefix),
     },
   };
+}
+
+async function emitApprovalRequestedEvents(
+  notifications: NotificationsService,
+  integrations: EcosystemAdaptersService,
+  publicBaseUrl: string,
+  tenantId: string,
+  approval: ApprovalRecord,
+): Promise<void> {
+  const recommendation = objectValue(approval.approvalSnapshot.recommendation);
+  const approvalSnapshot = objectValue(approval.approvalSnapshot.approval);
+  const recipients = approval.assignedToUserId
+    ? { recipientUserIds: [approval.assignedToUserId] }
+    : { recipientRoles: ["finance_approver", "tenant_admin"] };
+  const payload = {
+    instrument: stringValue(recommendation.instrument),
+    expected_savings_cents: stringValue(recommendation.expected_savings_cents),
+    p95_downside_loss_cents: stringValue(recommendation.p95_downside_loss_cents),
+  };
+  await Promise.allSettled([
+    notifications.emit({
+      tenantId,
+      eventType: "cloud_commitment.approval.requested",
+      eventId: approval.id,
+      sourceType: "approval",
+      sourceId: approval.id,
+      templateName: "approval_requested",
+      urgency: "high",
+      payload,
+      ...recipients,
+    }),
+    integrations.enqueueApprovalWorkflow({
+      tenantId,
+      approvalId: approval.id,
+      payload: {
+        approval_snapshot_id: approval.id,
+        recommendation_summary: {
+          provider: stringValue(recommendation.provider),
+          instrument: stringValue(recommendation.instrument),
+          service_code: stringValue(recommendation.service_code),
+          region: stringValue(recommendation.region),
+          term_months: numberValue(recommendation.term_months),
+          expected_savings_cents: stringValue(recommendation.expected_savings_cents),
+          p95_downside_loss_cents: stringValue(recommendation.p95_downside_loss_cents),
+        },
+        approver_email: stringValue(approvalSnapshot.assigned_to),
+        amount_cents: stringValue(recommendation.commitment_amount_cents),
+        risk_band: stringValue(recommendation.risk_band),
+        callback_url: `${publicBaseUrl}/api/approvals/${approval.id}`,
+      },
+    }),
+  ]);
+}
+
+async function emitApprovalDecidedNotification(
+  notifications: NotificationsService,
+  tenantId: string,
+  approval: ApprovalRecord,
+): Promise<void> {
+  await notifications.emit({
+    tenantId,
+    eventType: "cloud_commitment.approval.decided",
+    eventId: `${approval.id}:${approval.status}`,
+    sourceType: "approval",
+    sourceId: approval.id,
+    templateName: "approval_decided",
+    urgency: "medium",
+    payload: {
+      status: approval.status,
+      decision_reason: approval.decisionReason ?? "No reason supplied.",
+    },
+    ...(approval.assignedToUserId
+      ? { recipientUserIds: [approval.assignedToUserId] }
+      : { recipientRoles: ["finance_approver", "tenant_admin"] }),
+  });
+}
+
+async function emitImportProcessedEvents(
+  notifications: NotificationsService,
+  integrations: EcosystemAdaptersService,
+  tenantId: string,
+  batch: ImportBatchRecord,
+): Promise<void> {
+  const quarantined = batch.status === "quarantined";
+  const eventType = quarantined
+    ? "cloud_commitment.import.quarantined"
+    : "cloud_commitment.import.completed";
+  const reason = quarantined ? importReason(batch.errorDetails) : "";
+  const payload = {
+    status: batch.status,
+    source: batch.source,
+    format: batch.format,
+    line_count: batch.lineCount,
+    ...(quarantined ? { reason } : {}),
+  };
+  await Promise.allSettled([
+    notifications.emit({
+      tenantId,
+      eventType,
+      eventId: batch.id,
+      sourceType: "import_batch",
+      sourceId: batch.id,
+      templateName: quarantined ? "import_quarantined" : "import_completed",
+      urgency: quarantined ? "medium" : "low",
+      payload,
+    }),
+    integrations.enqueueNotificationEvent({
+      tenantId,
+      eventType,
+      eventId: batch.id,
+      payload,
+    }),
+  ]);
+}
+
+function importReason(errorDetails: Record<string, unknown>): string {
+  const reason = errorDetails.message ?? errorDetails.code;
+  return typeof reason === "string" && reason.trim() ? reason : "Parser review required.";
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown): number | string {
+  return typeof value === "number" || typeof value === "string" ? value : "";
 }
 
 export { createAuthenticationRuntime };
