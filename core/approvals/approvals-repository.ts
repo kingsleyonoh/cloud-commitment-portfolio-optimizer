@@ -18,6 +18,11 @@ export interface ApprovalsRepository {
   reject(tenantId: string, input: ApprovalDecisionInput): Promise<ApprovalRecord | null>;
   getRecommendation(tenantId: string, id: string): Promise<RecommendationRecord | null>;
   expireDue(now: Date, limit: number): Promise<ApprovalExpiryResult>;
+  setWorkflowExecutionId(
+    tenantId: string,
+    approvalId: string,
+    executionId: string,
+  ): Promise<void>;
 }
 
 interface ApprovalRow extends QueryResultRow {
@@ -102,6 +107,8 @@ export function createApprovalsRepository(pool: Pool): ApprovalsRepository {
     reject: (tenantId, input) => decide(pool, tenantId, input, "rejected"),
     getRecommendation: (tenantId, id) => getRecommendation(pool, tenantId, id),
     expireDue: (now, limit) => expireDue(pool, now, limit),
+    setWorkflowExecutionId: (tenantId, approvalId, executionId) =>
+      setWorkflowExecutionId(pool, tenantId, approvalId, executionId),
   };
 }
 
@@ -299,6 +306,20 @@ async function expireDue(pool: Pool, now: Date, limit: number): Promise<Approval
   } finally {
     client.release();
   }
+}
+
+async function setWorkflowExecutionId(
+  pool: Pool,
+  tenantId: string,
+  approvalId: string,
+  executionId: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE approvals
+        SET workflow_execution_id = $3
+      WHERE tenant_id = $1 AND id = $2 AND workflow_execution_id IS NULL`,
+    [tenantId, approvalId, executionId],
+  );
 }
 
 async function getRecommendationForUpdate(

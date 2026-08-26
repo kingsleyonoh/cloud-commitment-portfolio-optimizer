@@ -1,5 +1,6 @@
 import { AppError } from "../../core/shared/errors.js";
 import type { ApprovalExpiryWorker } from "../../core/approvals/approval-expiry-worker.js";
+import type { EcosystemAdaptersService } from "../../core/adapters/ecosystem-service.js";
 import type { BacktestWorker } from "../../core/backtests/backtest-worker.js";
 import type { ForecastWorker } from "../../core/forecasting/forecast-worker.js";
 import type { OptimizerWorker } from "../../core/optimizer-runs/optimizer-worker.js";
@@ -18,6 +19,7 @@ export interface BuildWorkerOptions {
   optimizers?: OptimizerWorker;
   approvals?: ApprovalExpiryWorker;
   backtests?: BacktestWorker;
+  adapters?: EcosystemAdaptersService;
 }
 
 export function buildWorker(options: BuildWorkerOptions): WorkerApplication {
@@ -44,6 +46,7 @@ async function startWorker(options: BuildWorkerOptions): Promise<void> {
   const optimizerResult = await options.optimizers?.processNextOptimizerRun();
   const approvalResult = await options.approvals?.processExpiredApprovals();
   const backtestResult = await options.backtests?.processNextBacktest();
+  const adapterResult = await options.adapters?.processNext();
   await options.logger.info("worker.ready", {
     approval_expiry_processed: approvalResult?.processed ?? false,
     approval_expiry_count: approvalResult?.approvalIds.length ?? 0,
@@ -56,5 +59,8 @@ async function startWorker(options: BuildWorkerOptions): Promise<void> {
     backtest_processed: backtestResult?.processed ?? false,
     backtest_run_id: backtestResult?.processed ? backtestResult.runId : null,
     backtest_status: backtestResult?.processed ? backtestResult.status : null,
+    adapter_processed: adapterResult?.processed ?? false,
+    adapter_event_id: adapterResult?.processed ? adapterResult.eventId : null,
+    adapter_status: adapterResult?.processed ? adapterResult.status : null,
   });
 }

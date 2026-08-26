@@ -40,10 +40,16 @@ export function parseIntegrations(source: EnvironmentSource): AppConfig["integra
   const flags = integrationFlags(source);
   const notificationKey = value(source, "NOTIFICATION_HUB_API_KEY");
   const workflowKey = value(source, "WORKFLOW_ENGINE_API_KEY");
+  const workflowId = value(source, "WORKFLOW_APPROVAL_WORKFLOW_ID");
   const invoiceKey = value(source, "INVOICE_RECON_API_KEY");
   validateIntegrationFlags(flags);
   requireEnabledCredential(flags.notification, notificationKey, "NOTIFICATION_HUB_API_KEY");
   requireEnabledCredential(flags.workflow, workflowKey, "WORKFLOW_ENGINE_API_KEY");
+  if (flags.workflow && !workflowId) {
+    throw new EnvironmentValidationError(
+      "WORKFLOW_APPROVAL_WORKFLOW_ID is required when the Workflow Engine is enabled.",
+    );
+  }
   requireEnabledCredential(flags.invoice, invoiceKey, "INVOICE_RECON_API_KEY");
   return {
     notificationHub: {
@@ -58,7 +64,7 @@ export function parseIntegrations(source: EnvironmentSource): AppConfig["integra
         "https:",
       ]),
       apiKey: workflowKey,
-      approvalWorkflowId: value(source, "WORKFLOW_APPROVAL_WORKFLOW_ID"),
+      approvalWorkflowId: workflowId,
     },
     invoiceReconciliation: {
       enabled: flags.invoice,

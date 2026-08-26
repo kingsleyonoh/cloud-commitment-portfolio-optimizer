@@ -16,12 +16,16 @@ import { createOptimizerRunsRepository } from "../../core/optimizer-runs/optimiz
 import { createOptimizerRunsService } from "../../core/optimizer-runs/optimizer-runs-service.js";
 import { createNotificationsRepository } from "../../core/notifications/notifications-repository.js";
 import { createNotificationsService } from "../../core/notifications/notifications-service.js";
+import { createEcosystemEventsRepository } from "../../core/adapters/ecosystem-repository.js";
+import { createEcosystemAdaptersService } from "../../core/adapters/ecosystem-service.js";
 import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
 import { createPriceTablesService } from "../../core/price-tables/price-tables-service.js";
 import { createRecommendationsRepository } from "../../core/recommendations/recommendations-repository.js";
 import { createRecommendationsService } from "../../core/recommendations/recommendations-service.js";
 import { createReportsRepository } from "../../core/reports/reports-repository.js";
 import { createReportsService } from "../../core/reports/reports-service.js";
+import { createScenariosRepository } from "../../core/scenarios/scenarios-repository.js";
+import { createScenariosService } from "../../core/scenarios/scenarios-service.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
 import type { Logger } from "../../core/shared/logger.js";
@@ -183,6 +187,8 @@ function applicationOptions(
   limiter: RegistrationLimiter | undefined,
   usersLimiter: ProtectedUsersLimiter,
 ): BuildAppOptions {
+  const approvalsRepository = createApprovalsRepository(database.pool);
+  const ecosystemRepository = createEcosystemEventsRepository(database.pool);
   return {
     logger,
     databaseProbe: () => database.health(),
@@ -250,7 +256,7 @@ function applicationOptions(
     },
     approvals: {
       limiter: usersLimiter,
-      service: createApprovalsService(createApprovalsRepository(database.pool), {
+      service: createApprovalsService(approvalsRepository, {
         expiryHours: config.approvals?.expiryHours ?? 168,
       }),
     },
@@ -264,6 +270,20 @@ function applicationOptions(
     notifications: {
       limiter: usersLimiter,
       service: createNotificationsService(createNotificationsRepository(database.pool)),
+    },
+    integrations: {
+      limiter: usersLimiter,
+      service: createEcosystemAdaptersService(
+        ecosystemRepository,
+        config.integrations,
+        undefined,
+        (tenantId, approvalId, executionId) =>
+          approvalsRepository.setWorkflowExecutionId(tenantId, approvalId, executionId),
+      ),
+    },
+    scenarios: {
+      limiter: usersLimiter,
+      service: createScenariosService(createScenariosRepository(database.pool)),
     },
     reports: {
       limiter: usersLimiter,

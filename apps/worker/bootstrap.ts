@@ -1,4 +1,6 @@
 import type { AppConfig } from "../../core/config/env.js";
+import { createEcosystemEventsRepository } from "../../core/adapters/ecosystem-repository.js";
+import { createEcosystemAdaptersService } from "../../core/adapters/ecosystem-service.js";
 import { createApprovalExpiryWorker } from "../../core/approvals/approval-expiry-worker.js";
 import { createApprovalsRepository } from "../../core/approvals/approvals-repository.js";
 import { createBacktestsRepository } from "../../core/backtests/backtests-repository.js";
@@ -52,6 +54,7 @@ export async function bootstrapWorker(
       config.storage.objectStoragePath,
     );
     initialized.add("objectStore");
+    const approvalsRepository = createApprovalsRepository(database.pool);
     worker = (options.buildApplication ?? buildWorker)({
       queue,
       logger,
@@ -59,8 +62,15 @@ export async function bootstrapWorker(
         minHistoryDays: config.forecasting.minHistoryDays,
       }),
       optimizers: createOptimizerWorker(createOptimizerRunsRepository(database.pool), objectStore),
-      approvals: createApprovalExpiryWorker(createApprovalsRepository(database.pool)),
+      approvals: createApprovalExpiryWorker(approvalsRepository),
       backtests: createBacktestWorker(createBacktestsRepository(database.pool), objectStore),
+      adapters: createEcosystemAdaptersService(
+        createEcosystemEventsRepository(database.pool),
+        config.integrations,
+        undefined,
+        (tenantId, approvalId, executionId) =>
+          approvalsRepository.setWorkflowExecutionId(tenantId, approvalId, executionId),
+      ),
     });
     close = (options.createCloser ?? createWorkerRuntimeCloser)(worker, initialized);
     await worker.start();

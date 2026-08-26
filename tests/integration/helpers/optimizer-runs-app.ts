@@ -11,6 +11,10 @@ import { createOptimizerRunsRepository } from "../../../core/optimizer-runs/opti
 import { createOptimizerRunsService } from "../../../core/optimizer-runs/optimizer-runs-service.js";
 import { createNotificationsRepository } from "../../../core/notifications/notifications-repository.js";
 import { createNotificationsService } from "../../../core/notifications/notifications-service.js";
+import { createEcosystemEventsRepository } from "../../../core/adapters/ecosystem-repository.js";
+import { createEcosystemAdaptersService } from "../../../core/adapters/ecosystem-service.js";
+import { createScenariosRepository } from "../../../core/scenarios/scenarios-repository.js";
+import { createScenariosService } from "../../../core/scenarios/scenarios-service.js";
 import type { Logger } from "../../../core/shared/logger.js";
 import { createLocalObjectStore, type ObjectStore } from "../../../core/shared/objectStore.js";
 import { createApiKeyCredential } from "../../../core/tenant/api-key-credential.js";
@@ -80,6 +84,28 @@ export async function createOptimizerRunsHarness(prefix: string): Promise<Optimi
     notifications: {
       limiter: createLocalProtectedUsersLimiter(),
       service: createNotificationsService(createNotificationsRepository(pool)),
+    },
+    integrations: {
+      limiter: createLocalProtectedUsersLimiter(),
+      service: createEcosystemAdaptersService(createEcosystemEventsRepository(pool), {
+        notificationHub: { enabled: false, url: "http://127.0.0.1:3847", apiKey: "" },
+        workflowEngine: {
+          enabled: false,
+          url: "http://127.0.0.1:3848",
+          apiKey: "",
+          approvalWorkflowId: "",
+        },
+        invoiceReconciliation: {
+          enabled: false,
+          contractVerified: false,
+          url: "",
+          apiKey: "",
+        },
+      }),
+    },
+    scenarios: {
+      limiter: createLocalProtectedUsersLimiter(),
+      service: createScenariosService(createScenariosRepository(pool)),
     },
   });
   return {

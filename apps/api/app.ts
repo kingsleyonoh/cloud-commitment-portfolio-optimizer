@@ -25,12 +25,14 @@ import {
 } from "./routes/optimizer-policies.js";
 import { registerOptimizerRunsRoutes, type OptimizerRunsRuntime } from "./routes/optimizer-runs.js";
 import { registerNotificationsRoutes, type NotificationsRuntime } from "./routes/notifications.js";
+import { registerIntegrationsRoutes, type IntegrationsRuntime } from "./routes/integrations.js";
 import { registerPriceTablesRoutes, type PriceTablesRuntime } from "./routes/price-tables.js";
 import {
   registerRecommendationsRoutes,
   type RecommendationsRuntime,
 } from "./routes/recommendations.js";
 import { registerReportsRoutes, type ReportsRuntime } from "./routes/reports.js";
+import { registerScenariosRoutes, type ScenariosRuntime } from "./routes/scenarios.js";
 import { registerSettingsRoute } from "./routes/settings.js";
 import {
   registerTenantRegistrationRoute,
@@ -62,6 +64,8 @@ export interface BuildAppOptions {
   approvals?: ApprovalsRuntime;
   backtests?: BacktestsRuntime;
   notifications?: NotificationsRuntime;
+  integrations?: IntegrationsRuntime;
+  scenarios?: ScenariosRuntime;
   reports?: ReportsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
@@ -128,6 +132,8 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.approvals) registerApprovalsRoutes(instance, options.approvals);
         if (options.backtests) registerBacktestsRoutes(instance, options.backtests);
         if (options.notifications) registerNotificationsRoutes(instance, options.notifications);
+        if (options.integrations) registerIntegrationsRoutes(instance, options.integrations);
+        if (options.scenarios) registerScenariosRoutes(instance, options.scenarios);
         if (options.reports) registerReportsRoutes(instance, options.reports);
         if (options.tenantProfile && options.users && options.apiKeys) {
           registerSettingsRoute(instance, {
