@@ -1,6 +1,8 @@
 import type { AppConfig } from "../../core/config/env.js";
 import { createApprovalExpiryWorker } from "../../core/approvals/approval-expiry-worker.js";
 import { createApprovalsRepository } from "../../core/approvals/approvals-repository.js";
+import { createBacktestsRepository } from "../../core/backtests/backtests-repository.js";
+import { createBacktestWorker } from "../../core/backtests/backtest-worker.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { createForecastRepository } from "../../core/forecasting/forecast-repository.js";
 import { createForecastWorker } from "../../core/forecasting/forecast-worker.js";
@@ -58,6 +60,7 @@ export async function bootstrapWorker(
       }),
       optimizers: createOptimizerWorker(createOptimizerRunsRepository(database.pool), objectStore),
       approvals: createApprovalExpiryWorker(createApprovalsRepository(database.pool)),
+      backtests: createBacktestWorker(createBacktestsRepository(database.pool), objectStore),
     });
     close = (options.createCloser ?? createWorkerRuntimeCloser)(worker, initialized);
     await worker.start();

@@ -48,6 +48,19 @@ export type BacktestRunRecord = Readonly<{
   updatedAt: string;
 }>;
 
+export type BacktestWorkerRun = BacktestRunRecord & Readonly<{ tenantId: string }>;
+
+export type BacktestUsageMonth = Readonly<{
+  month: string;
+  provider: "aws" | "azure" | "gcp";
+  serviceCode: string;
+  region: string;
+  onDemandCostCents: string;
+  realizedCostCents: string;
+  commitmentAppliedCents: string;
+  lineItemCount: number;
+}>;
+
 export type BacktestRun = Readonly<{
   id: string;
   name: string;

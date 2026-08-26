@@ -55,6 +55,9 @@ it("starts with an injected ready queue without enqueueing or polling", async ()
     optimizer_processed: false,
     optimizer_run_id: null,
     optimizer_status: null,
+    backtest_processed: false,
+    backtest_run_id: null,
+    backtest_status: null,
   });
 });
 
@@ -84,6 +87,9 @@ it("processes one forecast run when an injected forecast worker is available", a
     optimizer_processed: false,
     optimizer_run_id: null,
     optimizer_status: null,
+    backtest_processed: false,
+    backtest_run_id: null,
+    backtest_status: null,
   });
 });
 
@@ -114,6 +120,9 @@ it("processes one optimizer run when an injected optimizer worker is available",
     optimizer_processed: true,
     optimizer_run_id: "optimizer-run-1",
     optimizer_status: "completed",
+    backtest_processed: false,
+    backtest_run_id: null,
+    backtest_status: null,
   });
 });
 
@@ -141,5 +150,40 @@ it("processes expired approvals when an injected approval worker is available", 
     optimizer_processed: false,
     optimizer_run_id: null,
     optimizer_status: null,
+    backtest_processed: false,
+    backtest_run_id: null,
+    backtest_status: null,
+  });
+});
+
+it("processes one backtest run when an injected backtest worker is available", async () => {
+  const jobQueue = queue(true);
+  const workerLogger = logger();
+  const backtests = {
+    processNextBacktest: vi.fn(async () => ({
+      processed: true as const,
+      runId: "backtest-run-1",
+      status: "completed" as const,
+      outputUri: "backtests/backtest-run-1/output.json",
+      reportSnapshotCreated: true,
+    })),
+  };
+  const worker = buildWorker({ queue: jobQueue, logger: workerLogger, backtests });
+
+  await worker.start();
+
+  expect(backtests.processNextBacktest).toHaveBeenCalledTimes(1);
+  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    approval_expiry_processed: false,
+    approval_expiry_count: 0,
+    forecast_processed: false,
+    forecast_run_id: null,
+    forecast_status: null,
+    optimizer_processed: false,
+    optimizer_run_id: null,
+    optimizer_status: null,
+    backtest_processed: true,
+    backtest_run_id: "backtest-run-1",
+    backtest_status: "completed",
   });
 });
