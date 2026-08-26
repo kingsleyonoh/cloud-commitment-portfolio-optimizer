@@ -121,6 +121,13 @@ export function buildBacktestArtifact(
     selected_downside_loss_cents: selected?.downside_loss_cents ?? "0",
     best_baseline: best.baseline,
     best_simulated_savings_cents: best.simulated_savings_cents,
+    baseline_results: baselineResults.map((result) => ({
+      baseline: result.baseline,
+      simulated_savings_cents: result.simulated_savings_cents,
+      regret_cents: result.regret_cents,
+      downside_loss_cents: result.downside_loss_cents,
+      monthly_results: result.monthly_results,
+    })),
     no_future_leakage: true,
   };
   return {

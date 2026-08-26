@@ -10,6 +10,7 @@ import type {
 } from "../../../core/tenant/protected-users-limiter.js";
 import type { AuthAction } from "../../../core/tenant/rbac.js";
 import type { RequestContext } from "../../../core/tenant/request-context.js";
+import { renderBacktestDetailPage, renderBacktestsPage } from "../../web/backtests-page.js";
 import {
   backtestCreateBodySchema,
   backtestDetailSchema,
@@ -26,6 +27,8 @@ export interface BacktestsRuntime {
 }
 
 export function registerBacktestsRoutes(app: FastifyInstance, runtime: BacktestsRuntime): void {
+  registerBacktestPages(app, runtime);
+
   app.get<{ Querystring: Record<string, unknown> }>(
     "/api/backtests",
     {
@@ -73,6 +76,45 @@ export function registerBacktestsRoutes(app: FastifyInstance, runtime: Backtests
       },
     },
     async (request) => runtime.service.get(requestContext(request.authContext), request.params.id),
+  );
+}
+
+function registerBacktestPages(app: FastifyInstance, runtime: BacktestsRuntime): void {
+  app.get(
+    "/backtests",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/backtests", "backtests.read_run"),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderBacktestsPage({ backtests: page.backtests, role: context.role }));
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/backtests/:id",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/backtests/{id}",
+        "backtests.read_run",
+      ),
+      schema: { params: backtestPathSchema },
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const detail = await runtime.service.get(context, request.params.id);
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderBacktestDetailPage({ detail, role: context.role }));
+    },
   );
 }
 
