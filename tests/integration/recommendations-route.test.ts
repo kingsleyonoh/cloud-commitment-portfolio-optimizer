@@ -1,0 +1,328 @@
+import { randomUUID } from "node:crypto";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { dropIsolatedDatabase } from "./helpers/postgres-database.js";
+import {
+  closeRecommendationsHarness,
+  createRecommendationsHarness,
+  recommendationsAuthorization,
+  type RecommendationsHarness,
+} from "./helpers/recommendations-app.js";
+
+let harness: RecommendationsHarness;
+
+beforeAll(async () => {
+  harness = await createRecommendationsHarness("ccpo_recommendations_route");
+});
+
+afterAll(async () => {
+  await closeRecommendationsHarness(harness);
+  await dropIsolatedDatabase(harness?.database);
+});
+
+describe("GET /api/recommendations", () => {
+  it("lists same-tenant recommendations with filters and API-key access", async () => {
+    const first = await createRecommendation("list-low", harness.tenantA, {
+      expectedSavingsCents: "180000",
+      riskBand: "low",
+      status: "ready",
+    });
+    await createRecommendation("list-high", harness.tenantA, {
+      expectedSavingsCents: "90000",
+      riskBand: "high",
+      status: "pending_approval",
+      approvalRequired: true,
+    });
+    await createRecommendation("foreign", harness.tenantB, {
+      expectedSavingsCents: "999999",
+      riskBand: "low",
+      status: "ready",
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/api/recommendations?status=ready&risk_band=low&limit=1",
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      recommendations: [
+        {
+          id: first.recommendationId,
+          optimizer_run_id: first.runId,
+          recommendation_type: "buy",
+          provider: "aws",
+          instrument: "aws_compute_savings_plan",
+          service_code: "AmazonEC2",
+          expected_savings_cents: "180000",
+          risk_band: "low",
+          status: "ready",
+        },
+      ],
+    });
+    expect(response.json().next_cursor).toBeNull();
+    expect(response.body).not.toContain(harness.tenantB);
+    expect(response.body).not.toMatch(/tenant_id|credential|password|secret|token|raw_row|stack/iu);
+  });
+});
+
+describe("GET /api/recommendations/{id}", () => {
+  it("returns recommendation detail and hides foreign identifiers", async () => {
+    const fixture = await createRecommendation("detail", harness.tenantA);
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/api/recommendations/${fixture.recommendationId}`,
+      headers: recommendationsAuthorization(harness, "finops_analyst", "finops_analyst"),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      recommendation: {
+        id: fixture.recommendationId,
+        optimizer_run_id: fixture.runId,
+        expected_savings_cents: "180000",
+        p95_downside_loss_cents: "40000",
+        confidence_score: "0.9400",
+      },
+      report_summary: null,
+    });
+
+    const foreign = await createRecommendation("foreign-detail", harness.tenantB);
+    const hidden = await harness.app.inject({
+      method: "GET",
+      url: `/api/recommendations/${foreign.recommendationId}`,
+      headers: recommendationsAuthorization(harness),
+    });
+    expect(hidden.statusCode).toBe(404);
+    expect(hidden.body).not.toContain(harness.tenantB);
+  });
+});
+
+describe("GET /api/reports/{source_type}/{source_id}", () => {
+  it("captures and renders a recommendation report snapshot without approval tokens", async () => {
+    const fixture = await createRecommendation("report", harness.tenantA);
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${fixture.recommendationId}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      report_snapshot: {
+        source_type: "recommendation",
+        source_id: fixture.recommendationId,
+        status: "rendered",
+      },
+      rendered_html: expect.stringContaining("Recommendation report"),
+    });
+    expect(response.json().report_snapshot.rendered_html_uri).toMatch(
+      /^reports\/recommendation\/[0-9a-f-]+\/recommendation_report_v1\.html$/u,
+    );
+    expect(response.json().snapshot).toMatchObject({
+      template_id: "recommendation_report:v1",
+      recommendation: {
+        id: fixture.recommendationId,
+        type: "buy",
+        expected_savings: "180000",
+        p95_downside_loss: "40000",
+      },
+      approval: { status: "not_required" },
+    });
+    expect(response.body).not.toMatch(
+      /approval_token|tenant_id|credential|password|secret|token|raw_row|stack/iu,
+    );
+
+    const second = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${fixture.recommendationId}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().report_snapshot.id).toBe(response.json().report_snapshot.id);
+
+    const detail = await harness.app.inject({
+      method: "GET",
+      url: `/api/recommendations/${fixture.recommendationId}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(detail.json().report_summary).toMatchObject({
+      id: response.json().report_snapshot.id,
+      status: "rendered",
+      rendered_html_uri: response.json().report_snapshot.rendered_html_uri,
+    });
+  });
+
+  it("rejects unsupported report sources and hides foreign recommendations", async () => {
+    const foreign = await createRecommendation("foreign-report", harness.tenantB);
+    const hidden = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${foreign.recommendationId}`,
+      headers: recommendationsAuthorization(harness),
+    });
+    expect(hidden.statusCode).toBe(404);
+
+    const unsupported = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/approval/${randomUUID()}`,
+      headers: recommendationsAuthorization(harness),
+    });
+    expect(unsupported.statusCode).toBe(400);
+  });
+});
+
+async function createRecommendation(
+  label: string,
+  tenantId: string,
+  overrides: Partial<{
+    expectedSavingsCents: string;
+    riskBand: "low" | "medium" | "high" | "blocked";
+    status: "ready" | "pending_approval";
+    approvalRequired: boolean;
+  }> = {},
+): Promise<Readonly<{ runId: string; recommendationId: string }>> {
+  const forecastModel = await harness.pool.query<{ id: string }>(
+    `INSERT INTO forecast_models
+       (tenant_id, name, provider_scope, service_scope, horizon_months, method, config, status)
+     VALUES ($1, $2, ARRAY['aws'], ARRAY['AmazonEC2'], 12, 'seasonal_naive', '{}', 'draft')
+     RETURNING id`,
+    [tenantId, `${label}-${randomUUID()} model`],
+  );
+  await harness.pool.query("UPDATE forecast_models SET status = 'active' WHERE id = $1", [
+    forecastModel.rows[0]!.id,
+  ]);
+  const forecastRun = await harness.pool.query<{ id: string }>(
+    `INSERT INTO forecast_runs
+       (tenant_id, forecast_model_id, input_window_start, input_window_end, horizon_months,
+        random_seed)
+     VALUES ($1, $2, '2026-01-01', '2026-03-31', 12, 20260826)
+     RETURNING id`,
+    [tenantId, forecastModel.rows[0]!.id],
+  );
+  await harness.pool.query("UPDATE forecast_runs SET status = 'running' WHERE id = $1", [
+    forecastRun.rows[0]!.id,
+  ]);
+  await harness.pool.query(
+    `UPDATE forecast_runs
+        SET status = 'completed',
+            output_uri = $2,
+            quality_metrics = '{"confidence":"high","warnings":[]}'::jsonb
+      WHERE id = $1`,
+    [forecastRun.rows[0]!.id, `forecasts/${forecastRun.rows[0]!.id}/seasonal-naive-v1.json`],
+  );
+  const priceVersion = await harness.pool.query<{ id: string }>(
+    `INSERT INTO price_table_versions
+       (tenant_id, provider, instrument, version_label, effective_from, source_uri, status, checksum)
+     VALUES ($1, 'aws', 'aws_compute_savings_plan', $2, '2026-08-01', $3, 'draft', $4)
+     RETURNING id`,
+    [
+      tenantId,
+      `${label}-${randomUUID()} prices`,
+      `prices/${label}.json`,
+      randomUUID().replaceAll("-", "").padEnd(64, "0").slice(0, 64),
+    ],
+  );
+  await harness.pool.query(
+    `INSERT INTO price_table_items
+       (tenant_id, price_table_version_id, provider, instrument, sku, region,
+        term_months, payment_option, hourly_rate_cents, upfront_cents, coverage_rules)
+     VALUES ($1, $2, 'aws', 'aws_compute_savings_plan', $3, 'us-east-1',
+             12, 'no_upfront', 10, 0, '{"service_code":"AmazonEC2"}'::jsonb)`,
+    [tenantId, priceVersion.rows[0]!.id, `${label}-sku`],
+  );
+  await harness.pool.query(
+    `UPDATE price_table_versions
+        SET status = 'superseded'
+      WHERE tenant_id = $1
+        AND provider = 'aws'
+        AND instrument = 'aws_compute_savings_plan'
+        AND status = 'active'`,
+    [tenantId],
+  );
+  await harness.pool.query("UPDATE price_table_versions SET status = 'active' WHERE id = $1", [
+    priceVersion.rows[0]!.id,
+  ]);
+  const policy = await harness.pool.query<{ id: string }>(
+    `INSERT INTO optimizer_policies
+       (tenant_id, name, objective, max_downside_loss_cents, min_expected_savings_cents,
+        max_utilization_gap_pct, approval_threshold_cents, allowed_instruments, config)
+     VALUES ($1, $2, 'maximize_expected_savings', 500000, 10000, 12.50, 250000,
+             ARRAY['aws_compute_savings_plan']::text[], '{"liquidity_penalty_bps":100}'::jsonb)
+     RETURNING id`,
+    [tenantId, `${label}-${randomUUID()} policy`],
+  );
+  await harness.pool.query("UPDATE optimizer_policies SET status = 'active' WHERE id = $1", [
+    policy.rows[0]!.id,
+  ]);
+  const run = await harness.pool.query<{ id: string }>(
+    `INSERT INTO optimizer_runs
+       (tenant_id, forecast_run_id, optimizer_policy_id, provider, instrument,
+        price_table_version_ids, random_seed, input_snapshot_uri, output_uri, frontier_uri, status)
+     VALUES ($1, $2, $3, 'aws', 'aws_compute_savings_plan', $4::uuid[], 20260826,
+             $5, $6, $7, 'queued')
+     RETURNING id`,
+    [
+      tenantId,
+      forecastRun.rows[0]!.id,
+      policy.rows[0]!.id,
+      [priceVersion.rows[0]!.id],
+      `optimizer-runs/${label}/input.json`,
+      null,
+      null,
+    ],
+  );
+  await harness.pool.query("UPDATE optimizer_runs SET status = 'running' WHERE id = $1", [
+    run.rows[0]!.id,
+  ]);
+  await harness.pool.query(
+    `UPDATE optimizer_runs
+        SET status = 'completed',
+            output_uri = $2,
+            frontier_uri = $3
+      WHERE id = $1`,
+    [
+      run.rows[0]!.id,
+      `optimizer-runs/${run.rows[0]!.id}/output.json`,
+      `optimizer-runs/${run.rows[0]!.id}/frontier.json`,
+    ],
+  );
+  await harness.objectStore.put(
+    `optimizer-runs/${run.rows[0]!.id}/frontier.json`,
+    Buffer.from(
+      `${JSON.stringify({
+        schema_version: "optimizer-frontier:v1",
+        optimizer_run_id: run.rows[0]!.id,
+        summary: {
+          candidate_count: 1,
+          feasible_count: 1,
+          selected_expected_savings_cents: overrides.expectedSavingsCents ?? "180000",
+          selected_p95_downside_loss_cents: "40000",
+        },
+      })}\n`,
+      "utf8",
+    ),
+  );
+  const recommendation = await harness.pool.query<{ id: string }>(
+    `INSERT INTO recommendations
+       (tenant_id, optimizer_run_id, recommendation_type, provider, instrument, service_code,
+        region, term_months, commitment_amount_cents, expected_savings_cents,
+        p95_downside_loss_cents, utilization_p50_pct, utilization_p95_pct, confidence_score,
+        risk_band, status, explanation, approval_required)
+     VALUES ($1, $2, 'buy', 'aws', 'aws_compute_savings_plan', 'AmazonEC2',
+             'us-east-1', 12, 1000000, $3::bigint, 40000, 86.25, 94.75, 0.9400,
+             $4, $5, '{"baseline_name":"on_demand","binding_constraints":["risk_budget"],"price_table_version_ids":[]}'::jsonb, $6)
+     RETURNING id`,
+    [
+      tenantId,
+      run.rows[0]!.id,
+      overrides.expectedSavingsCents ?? "180000",
+      overrides.riskBand ?? "low",
+      overrides.status ?? "ready",
+      overrides.approvalRequired ?? false,
+    ],
+  );
+  return { runId: run.rows[0]!.id, recommendationId: recommendation.rows[0]!.id };
+}

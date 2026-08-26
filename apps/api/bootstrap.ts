@@ -10,6 +10,10 @@ import { createOptimizerRunsRepository } from "../../core/optimizer-runs/optimiz
 import { createOptimizerRunsService } from "../../core/optimizer-runs/optimizer-runs-service.js";
 import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
 import { createPriceTablesService } from "../../core/price-tables/price-tables-service.js";
+import { createRecommendationsRepository } from "../../core/recommendations/recommendations-repository.js";
+import { createRecommendationsService } from "../../core/recommendations/recommendations-service.js";
+import { createReportsRepository } from "../../core/reports/reports-repository.js";
+import { createReportsService } from "../../core/reports/reports-service.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
 import type { Logger } from "../../core/shared/logger.js";
@@ -228,6 +232,14 @@ function applicationOptions(
         objectStore,
         { defaultSeed: 20_260_616n },
       ),
+    },
+    recommendations: {
+      limiter: usersLimiter,
+      service: createRecommendationsService(createRecommendationsRepository(database.pool)),
+    },
+    reports: {
+      limiter: usersLimiter,
+      service: createReportsService(createReportsRepository(database.pool), objectStore),
     },
     ...(config.tenant?.registrationTrustedProxyCidrs
       ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }
