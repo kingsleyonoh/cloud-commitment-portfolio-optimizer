@@ -10,6 +10,7 @@ import type {
 } from "../../../core/tenant/protected-users-limiter.js";
 import type { AuthAction } from "../../../core/tenant/rbac.js";
 import type { RequestContext } from "../../../core/tenant/request-context.js";
+import { renderAccountsPage } from "../../web/accounts-page.js";
 import {
   cloudAccountCreateBodySchema,
   cloudAccountDeactivateBodySchema,
@@ -30,10 +31,34 @@ export function registerCloudAccountsRoutes(
   app: FastifyInstance,
   runtime: CloudAccountsRuntime,
 ): void {
+  registerAccountsPage(app, runtime);
   registerListRoute(app, runtime);
   registerCreateRoute(app, runtime);
   registerPatchRoute(app, runtime);
   registerDeactivateRoute(app, runtime);
+}
+
+function registerAccountsPage(app: FastifyInstance, runtime: CloudAccountsRuntime): void {
+  app.get(
+    "/accounts",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/cloud-accounts",
+        "cloud_accounts.read",
+      ),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100", is_active: "true" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderAccountsPage({ accounts: page.cloud_accounts, role: context.role }));
+    },
+  );
 }
 
 function registerListRoute(app: FastifyInstance, runtime: CloudAccountsRuntime): void {
