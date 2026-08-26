@@ -16,6 +16,10 @@ import { registerCloudAccountsRoutes, type CloudAccountsRuntime } from "./routes
 import { registerForecastRoutes, type ForecastsRuntime } from "./routes/forecasts.js";
 import { registerHealthRoutes, type DatabaseProbe } from "./routes/health.js";
 import { registerImportsRoutes, type ImportsRuntime } from "./routes/imports.js";
+import {
+  registerOptimizerPoliciesRoutes,
+  type OptimizerPoliciesRuntime,
+} from "./routes/optimizer-policies.js";
 import { registerPriceTablesRoutes, type PriceTablesRuntime } from "./routes/price-tables.js";
 import {
   registerTenantRegistrationRoute,
@@ -40,6 +44,7 @@ export interface BuildAppOptions {
   imports?: ImportsRuntime;
   priceTables?: PriceTablesRuntime;
   forecasts?: ForecastsRuntime;
+  optimizerPolicies?: OptimizerPoliciesRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
 
@@ -94,6 +99,9 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.imports) registerImportsRoutes(instance, options.imports);
         if (options.priceTables) registerPriceTablesRoutes(instance, options.priceTables);
         if (options.forecasts) registerForecastRoutes(instance, options.forecasts);
+        if (options.optimizerPolicies) {
+          registerOptimizerPoliciesRoutes(instance, options.optimizerPolicies);
+        }
         await options.protectedRoutes?.(instance);
       },
     });

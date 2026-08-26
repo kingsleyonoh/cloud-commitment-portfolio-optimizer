@@ -4,6 +4,8 @@ import { createImportsRepository } from "../../core/imports/imports-repository.j
 import { createImportsService } from "../../core/imports/imports-service.js";
 import { createForecastRepository } from "../../core/forecasting/forecast-repository.js";
 import { createForecastService } from "../../core/forecasting/forecast-service.js";
+import { createOptimizerPoliciesRepository } from "../../core/optimizer-policies/optimizer-policies-repository.js";
+import { createOptimizerPoliciesService } from "../../core/optimizer-policies/optimizer-policies-service.js";
 import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
 import { createPriceTablesService } from "../../core/price-tables/price-tables-service.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
@@ -212,6 +214,10 @@ function applicationOptions(
       service: createForecastService(createForecastRepository(database.pool), {
         defaultSeed: BigInt(config.forecasting?.randomSeed ?? 20_260_616),
       }),
+    },
+    optimizerPolicies: {
+      limiter: usersLimiter,
+      service: createOptimizerPoliciesService(createOptimizerPoliciesRepository(database.pool)),
     },
     ...(config.tenant?.registrationTrustedProxyCidrs
       ? { registrationTrustedProxyCidrs: config.tenant.registrationTrustedProxyCidrs }
