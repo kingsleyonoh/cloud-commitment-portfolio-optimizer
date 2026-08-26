@@ -19,6 +19,7 @@ import {
   priceTablesListResponseSchema,
   priceTablesResponseSchemas,
 } from "./price-tables-schema.js";
+import { renderPriceTablesPage } from "../../web/price-tables-page.js";
 
 export interface PriceTablesRuntime {
   limiter: ProtectedUsersLimiter;
@@ -26,9 +27,27 @@ export interface PriceTablesRuntime {
 }
 
 export function registerPriceTablesRoutes(app: FastifyInstance, runtime: PriceTablesRuntime): void {
+  registerPriceTablesPage(app, runtime);
   registerListRoute(app, runtime);
   registerCreateRoute(app, runtime);
   registerActivateRoute(app, runtime);
+}
+
+function registerPriceTablesPage(app: FastifyInstance, runtime: PriceTablesRuntime): void {
+  app.get(
+    "/price-tables",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/price-tables", "price_tables.read"),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderPriceTablesPage({ priceTables: page.price_tables, role: context.role }));
+    },
+  );
 }
 
 function registerListRoute(app: FastifyInstance, runtime: PriceTablesRuntime): void {
