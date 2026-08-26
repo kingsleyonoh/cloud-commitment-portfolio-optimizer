@@ -18,6 +18,7 @@ export interface OptimizerRunsRepository {
     input: OptimizerRunCreateInput,
   ): Promise<ResolvedOptimizerRunInputs | null>;
   create(tenantId: string, input: OptimizerRunSnapshotInput): Promise<OptimizerRunRecord>;
+  get(tenantId: string, id: string): Promise<OptimizerRunRecord | null>;
 }
 
 interface OptimizerRunRow extends QueryResultRow {
@@ -53,6 +54,7 @@ export function createOptimizerRunsRepository(pool: Pool): OptimizerRunsReposito
   return {
     resolveInputs: (tenantId, input) => resolveInputs(pool, tenantId, input),
     create: (tenantId, input) => create(pool, tenantId, input),
+    get: (tenantId, id) => get(pool, tenantId, id),
   };
 }
 
@@ -234,6 +236,16 @@ async function priceSnapshots(
   );
   if (explicitIds && result.rowCount !== explicitIds.length) return null;
   return Object.freeze(result.rows.map((row) => Object.freeze({ ...row })));
+}
+
+async function get(pool: Pool, tenantId: string, id: string): Promise<OptimizerRunRecord | null> {
+  const result = await pool.query<OptimizerRunRow>(
+    `SELECT ${RUN_PROJECTION}
+       FROM optimizer_runs
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, id],
+  );
+  return result.rows[0] ? freezeRun(result.rows[0]) : null;
 }
 
 function freezeRun(row: OptimizerRunRow): OptimizerRunRecord {

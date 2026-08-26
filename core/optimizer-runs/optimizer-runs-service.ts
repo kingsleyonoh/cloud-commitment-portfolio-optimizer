@@ -3,12 +3,17 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "../shared/errors.js";
 import type { ObjectStore } from "../shared/objectStore.js";
 import type { RequestContext } from "../tenant/request-context.js";
-import { parseOptimizerRunCreateBody } from "./optimizer-runs-input.js";
+import { parseOptimizerRunCreateBody, parseOptimizerRunId } from "./optimizer-runs-input.js";
 import type { OptimizerRunsRepository } from "./optimizer-runs-repository.js";
-import type { OptimizerRun, OptimizerRunRecord } from "./optimizer-runs-types.js";
+import type {
+  OptimizerRun,
+  OptimizerRunDetail,
+  OptimizerRunRecord,
+} from "./optimizer-runs-types.js";
 
 export interface OptimizerRunsService {
   create(context: RequestContext, body: unknown): Promise<OptimizerRun>;
+  get(context: RequestContext, id: unknown): Promise<OptimizerRunDetail>;
 }
 
 export interface OptimizerRunsServiceOptions {
@@ -23,6 +28,7 @@ export function createOptimizerRunsService(
   return {
     create: (context, body) =>
       createRun(repository, objectStore, options.defaultSeed, context, body),
+    get: (context, id) => getRun(repository, context, id),
   };
 }
 
@@ -63,6 +69,17 @@ async function createRun(
     }),
   );
   return toRun(row);
+}
+
+async function getRun(
+  repository: OptimizerRunsRepository,
+  context: RequestContext,
+  idValue: unknown,
+): Promise<OptimizerRunDetail> {
+  const id = parseOptimizerRunId(idValue);
+  const row = await safe(() => repository.get(context.tenantId, id));
+  if (!row) throw notFound();
+  return { optimizer_run: toRun(row), frontier_summary: null };
 }
 
 async function writeSnapshot(

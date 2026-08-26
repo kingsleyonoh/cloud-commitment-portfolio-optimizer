@@ -3,7 +3,7 @@
 Last updated: 2026-08-26
 Template synced: 2026-07-14
 PRD: `docs/cloud-commitment-portfolio-optimizer_prd.md`
-Status: Phase 0 is evidence-closed and Phase 1 is active. The standalone session API now includes local-password login, no-`kid` RS256 access-cookie issuance, stable-family refresh rotation/reuse revocation, logout, endpoint-specific cookie/Origin/Fetch/CSRF selection, Redis abuse controls, authenticated cloud-account management, synthetic/AWS CSV import ingestion/listing/detail, AWS Compute Savings Plan price-table management, and seasonal-naive forecast model/run route management while preserving bearer/API-key contracts. The worker can process queued seasonal-naive forecast runs into local object-store artifacts with quality metrics and low-confidence warnings. The Zig economic kernel now computes deterministic PRD §5.5 cents formulas against golden fixtures; optimizer policy routes manage tenant-scoped draft/active/archived risk policies with JWT-only access; and optimizer-run creation freezes AWS Compute Savings Plan inputs into queued runs and local input snapshot artifacts. `/login` HTML/HTMX and Phase 3 deployment/production readiness remain deferred.
+Status: Phase 0 is evidence-closed and Phase 1 is active. The standalone session API now includes local-password login, no-`kid` RS256 access-cookie issuance, stable-family refresh rotation/reuse revocation, logout, endpoint-specific cookie/Origin/Fetch/CSRF selection, Redis abuse controls, authenticated cloud-account management, synthetic/AWS CSV import ingestion/listing/detail, AWS Compute Savings Plan price-table management, and seasonal-naive forecast model/run route management while preserving bearer/API-key contracts. The worker can process queued seasonal-naive forecast runs into local object-store artifacts with quality metrics and low-confidence warnings. The Zig economic kernel now computes deterministic PRD §5.5 cents formulas against golden fixtures; optimizer policy routes manage tenant-scoped draft/active/archived risk policies with JWT-only access; and optimizer-run creation/detail APIs freeze AWS Compute Savings Plan inputs into queued runs, local input snapshot artifacts, and tenant-scoped run detail envelopes with a `null` frontier summary until worker persistence lands. `/login` HTML/HTMX and Phase 3 deployment/production readiness remain deferred.
 
 ## Tech Stack
 
@@ -106,7 +106,7 @@ Tenant-scoped by default. `tenants` is a credential-free metadata ownership root
 | Imports | `core/imports/` | Current for synthetic CSV and AWS CUR CSV parser/service/repository plus import read APIs; future provider/format expansion remains planned |
 | Pricing | `core/pricing/` | Planned — Phase 1 |
 | Forecasting | `core/forecasting/` | Current for protected model/run API inputs, cursors, repository, service, worker claiming, artifact writing, and quality metrics |
-| Optimizer | `core/optimizer/` and `core/optimizer-runs/` | Current for PRD §5.5 economic formula CLI, golden fixtures, and optimizer-run creation; detail routes/workers remain planned |
+| Optimizer | `core/optimizer/` and `core/optimizer-runs/` | Current for PRD §5.5 economic formula CLI, golden fixtures, optimizer-run creation, and optimizer-run detail reads; workers remain planned |
 | Reports/templates | `core/reports/` | Planned — Phase 1 |
 | Notifications | `core/notifications/` | Planned — Phase 2 |
 | Adapters | `core/adapters/` | Planned — Phase 2 |

@@ -12,6 +12,8 @@ import type { AuthAction } from "../../../core/tenant/rbac.js";
 import type { RequestContext } from "../../../core/tenant/request-context.js";
 import {
   optimizerRunCreateBodySchema,
+  optimizerRunDetailSchema,
+  optimizerRunPathSchema,
   optimizerRunSchema,
   optimizerRunsResponseSchemas,
 } from "./optimizer-runs-schema.js";
@@ -45,6 +47,24 @@ export function registerOptimizerRunsRoutes(
       const run = await runtime.service.create(requestContext(request.authContext), request.body);
       return reply.code(201).send(run);
     },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/api/optimizer-runs/:id",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/optimizer-runs/{id}",
+        "optimizer_runs.read",
+      ),
+      schema: {
+        params: optimizerRunPathSchema,
+        response: { 200: optimizerRunDetailSchema, ...optimizerRunsResponseSchemas },
+      },
+    },
+    async (request) => runtime.service.get(requestContext(request.authContext), request.params.id),
   );
 }
 

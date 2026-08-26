@@ -41,6 +41,10 @@ export function parseOptimizerRunCreateBody(body: unknown): OptimizerRunCreateIn
   });
 }
 
+export function parseOptimizerRunId(value: unknown): string {
+  return uuidValue(value);
+}
+
 function uuidArray(value: unknown): readonly string[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 16) throw invalid();
   const ids = value.map(uuidValue);

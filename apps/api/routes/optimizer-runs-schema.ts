@@ -86,6 +86,25 @@ export const optimizerRunSchema = {
   },
 } as const;
 
+export const optimizerRunDetailSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["optimizer_run", "frontier_summary"],
+  properties: {
+    optimizer_run: optimizerRunSchema,
+    frontier_summary: {
+      anyOf: [{ type: "object", additionalProperties: true }, { type: "null" }],
+    },
+  },
+} as const;
+
+export const optimizerRunPathSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: { id: uuidSchema },
+} as const;
+
 export const optimizerRunsResponseSchemas = {
   400: optimizerRunErrorSchema,
   401: optimizerRunErrorSchema,

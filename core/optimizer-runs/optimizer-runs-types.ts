@@ -52,6 +52,11 @@ export type OptimizerRun = Readonly<{
   updated_at: string;
 }>;
 
+export type OptimizerRunDetail = Readonly<{
+  optimizer_run: OptimizerRun;
+  frontier_summary: Record<string, unknown> | null;
+}>;
+
 export type OptimizerRunSnapshotInput = OptimizerRunCreateInput &
   Readonly<{
     id: string;

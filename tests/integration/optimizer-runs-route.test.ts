@@ -185,6 +185,46 @@ describe("POST /api/optimizer-runs", () => {
   });
 });
 
+describe("GET /api/optimizer-runs/{id}", () => {
+  it("returns the tenant run with a null frontier summary before the worker completes it", async () => {
+    const fixture = await createRunFixture("detail");
+    const created = await postRun({
+      forecast_run_id: fixture.forecastRunId,
+      optimizer_policy_id: fixture.policyId,
+      price_table_version_ids: [fixture.priceVersionId],
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/api/optimizer-runs/${created.json().id}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      optimizer_run: {
+        id: created.json().id,
+        status: "queued",
+        input_snapshot_uri: created.json().input_snapshot_uri,
+      },
+      frontier_summary: null,
+    });
+    expect(response.body).not.toMatch(/tenant_id|credential|password|secret|token|raw_row|stack/iu);
+  });
+
+  it("hides foreign optimizer run identifiers", async () => {
+    const foreign = await createForeignRun();
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/api/optimizer-runs/${foreign}`,
+      headers: optimizerRunsAuthorization(harness),
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body).not.toContain(harness.tenantB);
+  });
+});
+
 async function createRunFixture(label: string) {
   const forecastModelId = await insertForecastModel(label);
   const forecastRunId = await insertForecastRun(forecastModelId, "completed");
@@ -201,6 +241,36 @@ async function createForeignFixture() {
   const forecastRunId = await insertForecastRun(forecastModelId, "completed", harness.tenantB);
   const priceVersionId = await insertPriceVersion(`foreign-${randomUUID()}`, harness.tenantB);
   return { forecastRunId, priceVersionId };
+}
+
+async function createForeignRun(): Promise<string> {
+  const foreign = await createForeignFixture();
+  const policy = await harness.pool.query<{ id: string }>(
+    `INSERT INTO optimizer_policies
+       (tenant_id, name, objective, max_downside_loss_cents, allowed_instruments, config)
+     VALUES ($1, $2, 'maximize_expected_savings', 500000,
+             ARRAY['aws_compute_savings_plan']::text[], '{}')
+     RETURNING id`,
+    [harness.tenantB, `foreign-run-${randomUUID()} policy`],
+  );
+  await harness.pool.query("UPDATE optimizer_policies SET status = 'active' WHERE id = $1", [
+    policy.rows[0]!.id,
+  ]);
+  const run = await harness.pool.query<{ id: string }>(
+    `INSERT INTO optimizer_runs
+       (tenant_id, forecast_run_id, optimizer_policy_id, provider, instrument,
+        price_table_version_ids, random_seed, input_snapshot_uri)
+     VALUES ($1, $2, $3, 'aws', 'aws_compute_savings_plan', $4::uuid[], 20260826, $5)
+     RETURNING id`,
+    [
+      harness.tenantB,
+      foreign.forecastRunId,
+      policy.rows[0]!.id,
+      [foreign.priceVersionId],
+      `optimizer-runs/foreign-${randomUUID()}/input.json`,
+    ],
+  );
+  return run.rows[0]!.id;
 }
 
 async function insertForecastModel(label: string, tenantId = harness.tenantA): Promise<string> {
