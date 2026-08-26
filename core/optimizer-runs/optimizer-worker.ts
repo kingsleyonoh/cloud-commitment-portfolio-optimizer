@@ -29,7 +29,7 @@ interface ForecastPoint {
   forecast_on_demand_cost_cents: string;
 }
 
-interface CandidateEvaluation {
+export type AwsComputeSavingsPlanCandidate = Readonly<{
   provider: "aws";
   instrument: "aws_compute_savings_plan";
   service_code: string;
@@ -45,7 +45,7 @@ interface CandidateEvaluation {
   risk_band: "low" | "medium" | "high" | "blocked";
   feasible: boolean;
   binding_constraints: readonly string[];
-}
+}>;
 
 const HOURS_PER_MONTH = 730n;
 
@@ -69,7 +69,7 @@ async function processNext(
     const forecastUri = forecastOutputUri(snapshot);
     const forecast = await readJson(objectStore, forecastUri);
     const priceItems = await repository.listFrozenPriceItems(run);
-    const candidates = evaluateCandidates(run, snapshot, forecast, priceItems);
+    const candidates = optimizeAwsComputeSavingsPlan(run, snapshot, forecast, priceItems);
     const feasible = candidates.filter((candidate) => candidate.feasible);
     const selected = feasible[0] ?? null;
     const frontier = buildFrontier(run, candidates, selected);
@@ -113,12 +113,12 @@ async function processNext(
   }
 }
 
-function evaluateCandidates(
+export function optimizeAwsComputeSavingsPlan(
   run: OptimizerWorkerRun,
   snapshot: Record<string, unknown>,
   forecast: Record<string, unknown>,
   priceItems: readonly OptimizerPriceItem[],
-): CandidateEvaluation[] {
+): AwsComputeSavingsPlanCandidate[] {
   const points = forecastPoints(forecast).filter(
     (point) => point.provider === run.provider && point.region.length > 0,
   );
@@ -133,7 +133,7 @@ function evaluateItem(
   policy: PolicySnapshot,
   points: readonly ForecastPoint[],
   item: OptimizerPriceItem,
-): CandidateEvaluation[] {
+): AwsComputeSavingsPlanCandidate[] {
   if (points.length === 0) return [];
   const eligibleCosts = points
     .map((point) => BigInt(point.forecast_on_demand_cost_cents))
@@ -195,7 +195,7 @@ function pointsForItem(
 function recommendationInput(
   run: OptimizerWorkerRun,
   snapshot: Record<string, unknown>,
-  selected: CandidateEvaluation,
+  selected: AwsComputeSavingsPlanCandidate,
 ): OptimizerRecommendationInput {
   const policy = policySnapshot(snapshot);
   const approvalRequired =
@@ -227,7 +227,7 @@ function recommendationInput(
 
 function buildOutput(
   run: OptimizerWorkerRun,
-  selected: CandidateEvaluation,
+  selected: AwsComputeSavingsPlanCandidate,
 ): Record<string, unknown> {
   return {
     schema_version: "optimizer-run-output:v1",
@@ -238,8 +238,8 @@ function buildOutput(
 
 function buildFrontier(
   run: OptimizerWorkerRun,
-  candidates: readonly CandidateEvaluation[],
-  selected: CandidateEvaluation | null,
+  candidates: readonly AwsComputeSavingsPlanCandidate[],
+  selected: AwsComputeSavingsPlanCandidate | null,
 ): Record<string, unknown> {
   const bestExpected = maxBigInt(
     candidates.map((candidate) => BigInt(candidate.expected_savings_cents)),
@@ -262,7 +262,9 @@ function buildFrontier(
   };
 }
 
-function infeasibilityDetails(candidates: readonly CandidateEvaluation[]): Record<string, unknown> {
+function infeasibilityDetails(
+  candidates: readonly AwsComputeSavingsPlanCandidate[],
+): Record<string, unknown> {
   const lowestDownside = minBigInt(
     candidates.map((candidate) => BigInt(candidate.p95_downside_loss_cents)),
   );
@@ -346,7 +348,10 @@ function riskBand(
   return p95Downside <= maxDownsideLossCents ? "medium" : "high";
 }
 
-function compareCandidates(left: CandidateEvaluation, right: CandidateEvaluation): number {
+function compareCandidates(
+  left: AwsComputeSavingsPlanCandidate,
+  right: AwsComputeSavingsPlanCandidate,
+): number {
   if (left.feasible !== right.feasible) return left.feasible ? -1 : 1;
   const expected = BigInt(right.expected_savings_cents) - BigInt(left.expected_savings_cents);
   if (expected !== 0n) return expected > 0n ? 1 : -1;

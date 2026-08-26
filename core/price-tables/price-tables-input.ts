@@ -16,6 +16,10 @@ const OBJECT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,2047}$/u;
 const UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]{0,18})$/u;
 
 export function parsePriceTableCreateBody(body: unknown): PriceTableCreateInput {
+  return parseAwsComputeSavingsPlanPriceTable(body);
+}
+
+export function parseAwsComputeSavingsPlanPriceTable(body: unknown): PriceTableCreateInput {
   const object = closedRecord(body);
   rejectUnknown(
     object,
