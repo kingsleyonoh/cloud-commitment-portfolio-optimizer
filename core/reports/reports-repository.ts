@@ -19,6 +19,7 @@ export interface ReportsRepository {
     createdByUserId: string | null,
   ): Promise<ReportSnapshotRecord>;
   markRendered(id: string, renderedHtmlUri: string): Promise<ReportSnapshotRecord>;
+  markFailed(id: string): Promise<ReportSnapshotRecord>;
 }
 
 interface ReportSnapshotRow extends QueryResultRow {
@@ -42,8 +43,8 @@ interface RecommendationReportRow extends QueryResultRow {
   financeOwnerEmail: string | null;
   recommendationId: string;
   recommendationType: string;
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+  provider: RecommendationReportData["recommendation"]["provider"];
+  instrument: RecommendationReportData["recommendation"]["instrument"];
   termMonths: number;
   commitmentAmountCents: string;
   expectedSavingsCents: string;
@@ -71,6 +72,7 @@ export function createReportsRepository(pool: Pool): ReportsRepository {
     createQueuedRecommendationReport: (tenantId, recommendationId, snapshot, createdByUserId) =>
       createQueuedRecommendationReport(pool, tenantId, recommendationId, snapshot, createdByUserId),
     markRendered: (id, renderedHtmlUri) => markRendered(pool, id, renderedHtmlUri),
+    markFailed: (id) => markFailed(pool, id),
   };
 }
 
@@ -192,6 +194,17 @@ async function markRendered(
       WHERE id = $1 AND status = 'queued'
       RETURNING ${SNAPSHOT_PROJECTION}`,
     [id, renderedHtmlUri],
+  );
+  return freezeSnapshot(result.rows[0]!);
+}
+
+async function markFailed(pool: Pool, id: string): Promise<ReportSnapshotRecord> {
+  const result = await pool.query<ReportSnapshotRow>(
+    `UPDATE report_snapshots
+        SET status = 'failed'
+      WHERE id = $1 AND status = 'queued'
+      RETURNING ${SNAPSHOT_PROJECTION}`,
+    [id],
   );
   return freezeSnapshot(result.rows[0]!);
 }

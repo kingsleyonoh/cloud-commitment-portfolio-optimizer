@@ -20,8 +20,8 @@ interface RecommendationRow extends QueryResultRow {
   id: string;
   optimizerRunId: string;
   recommendationType: RecommendationRecord["recommendationType"];
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+  provider: RecommendationRecord["provider"];
+  instrument: RecommendationRecord["instrument"];
   serviceCode: string;
   region: string;
   termMonths: number;

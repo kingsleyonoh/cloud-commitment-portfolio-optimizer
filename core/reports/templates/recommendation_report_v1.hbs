@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Recommendation report</title>
+  </head>
+  <body>
+    <h1>Recommendation report</h1>
+    <p>{{tenant.display_name}} — {{tenant.full_legal_name}}</p>
+    <p>Finance owner: {{tenant.contact.finance_owner_email}}</p>
+    <p>Type: {{recommendation.type}}</p>
+    <p>Provider: {{recommendation.provider}}</p>
+    <p>Instrument: {{recommendation.instrument}}</p>
+    <p>Term months: {{recommendation.term_months}}</p>
+    <p>Commitment amount: {{recommendation.commitment_amount}}</p>
+    <p>Expected savings: {{recommendation.expected_savings}}</p>
+    <p>P95 downside loss: {{recommendation.p95_downside_loss}}</p>
+    <p>Risk band: {{recommendation.risk_band}}</p>
+    <p>Confidence score: {{recommendation.confidence_score}}</p>
+    <p>Baseline: {{frontier.baseline_name}}</p>
+    <p>Net savings delta: {{frontier.net_savings_delta}}</p>
+    <p>Binding constraints: {{constraints.binding}}</p>
+    <p>Price table: {{price_table.version_label}}</p>
+    <p>Forecast quality: {{forecast.quality_summary}}</p>
+  </body>
+</html>

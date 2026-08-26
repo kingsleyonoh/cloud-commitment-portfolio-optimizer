@@ -98,6 +98,43 @@ describe("GET /api/recommendations/{id}", () => {
     expect(hidden.statusCode).toBe(404);
     expect(hidden.body).not.toContain(harness.tenantB);
   });
+
+  it("returns and reports a P2 provider/instrument recommendation", async () => {
+    const fixture = await createRecommendation("p2-detail", harness.tenantA, {
+      provider: "azure",
+      instrument: "azure_reservation",
+      serviceCode: "Microsoft.Compute",
+      region: "eastus",
+      expectedSavingsCents: "220000",
+    });
+
+    const detail = await harness.app.inject({
+      method: "GET",
+      url: `/api/recommendations/${fixture.recommendationId}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().recommendation).toMatchObject({
+      provider: "azure",
+      instrument: "azure_reservation",
+      service_code: "Microsoft.Compute",
+      region: "eastus",
+      expected_savings_cents: "220000",
+    });
+
+    const report = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${fixture.recommendationId}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(report.statusCode).toBe(200);
+    expect(report.json().snapshot.recommendation).toMatchObject({
+      provider: "azure",
+      instrument: "azure_reservation",
+      expected_savings: "220000",
+    });
+    expect(report.json().rendered_html).toContain("azure_reservation");
+  });
 });
 
 describe("GET /api/reports/{source_type}/{source_id}", () => {
@@ -124,6 +161,11 @@ describe("GET /api/reports/{source_type}/{source_id}", () => {
     );
     expect(response.json().snapshot).toMatchObject({
       template_id: "recommendation_report:v1",
+      tenant: {
+        contact: {
+          finance_owner_email: "finops@example.invalid",
+        },
+      },
       recommendation: {
         id: fixture.recommendationId,
         type: "buy",
@@ -132,6 +174,7 @@ describe("GET /api/reports/{source_type}/{source_id}", () => {
       },
       approval: { status: "not_required" },
     });
+    expect(response.json().rendered_html).toContain("Finance owner:");
     expect(response.body).not.toMatch(
       /approval_token|tenant_id|credential|password|secret|token|raw_row|stack/iu,
     );
@@ -143,6 +186,7 @@ describe("GET /api/reports/{source_type}/{source_id}", () => {
     });
     expect(second.statusCode).toBe(200);
     expect(second.json().report_snapshot.id).toBe(response.json().report_snapshot.id);
+    expect(second.json().snapshot).toEqual(response.json().snapshot);
 
     const detail = await harness.app.inject({
       method: "GET",
@@ -154,6 +198,42 @@ describe("GET /api/reports/{source_type}/{source_id}", () => {
       status: "rendered",
       rendered_html_uri: response.json().report_snapshot.rendered_html_uri,
     });
+  });
+
+  it("reuses the frozen rendered snapshot after live recommendation inputs change", async () => {
+    const fixture = await createRecommendation("report-freeze", harness.tenantA);
+    const first = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${fixture.recommendationId}`,
+      headers: recommendationsAuthorization(harness),
+    });
+    expect(first.statusCode).toBe(200);
+
+    await harness.pool.query(
+      `UPDATE recommendations
+          SET status = 'superseded'
+        WHERE id = $1`,
+      [fixture.recommendationId],
+    );
+    await harness.pool.query(
+      `UPDATE tenants
+          SET display_name = 'Changed Tenant',
+              finance_owner_email = 'changed-finance@example.invalid'
+        WHERE id = $1`,
+      [harness.tenantA],
+    );
+
+    const second = await harness.app.inject({
+      method: "GET",
+      url: `/api/reports/recommendation/${fixture.recommendationId}`,
+      headers: recommendationsAuthorization(harness),
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().report_snapshot.id).toBe(first.json().report_snapshot.id);
+    expect(second.json().snapshot).toEqual(first.json().snapshot);
+    expect(second.json().rendered_html).toBe(first.json().rendered_html);
+    expect(second.body).not.toContain("Changed Tenant");
+    expect(second.body).not.toContain("changed-finance@example.invalid");
   });
 
   it("rejects unsupported report sources and hides foreign recommendations", async () => {
@@ -178,18 +258,31 @@ async function createRecommendation(
   label: string,
   tenantId: string,
   overrides: Partial<{
+    provider: "aws" | "azure" | "gcp";
+    instrument:
+      | "aws_compute_savings_plan"
+      | "aws_reserved_instance"
+      | "azure_savings_plan"
+      | "azure_reservation"
+      | "gcp_committed_use_discount";
+    serviceCode: string;
+    region: string;
     expectedSavingsCents: string;
     riskBand: "low" | "medium" | "high" | "blocked";
     status: "ready" | "pending_approval";
     approvalRequired: boolean;
   }> = {},
 ): Promise<Readonly<{ runId: string; recommendationId: string }>> {
+  const provider = overrides.provider ?? "aws";
+  const instrument = overrides.instrument ?? "aws_compute_savings_plan";
+  const serviceCode = overrides.serviceCode ?? "AmazonEC2";
+  const region = overrides.region ?? "us-east-1";
   const forecastModel = await harness.pool.query<{ id: string }>(
     `INSERT INTO forecast_models
        (tenant_id, name, provider_scope, service_scope, horizon_months, method, config, status)
-     VALUES ($1, $2, ARRAY['aws'], ARRAY['AmazonEC2'], 12, 'seasonal_naive', '{}', 'draft')
+     VALUES ($1, $2, ARRAY[$3]::text[], ARRAY[$4]::text[], 12, 'seasonal_naive', '{}', 'draft')
      RETURNING id`,
-    [tenantId, `${label}-${randomUUID()} model`],
+    [tenantId, `${label}-${randomUUID()} model`, provider, serviceCode],
   );
   await harness.pool.query("UPDATE forecast_models SET status = 'active' WHERE id = $1", [
     forecastModel.rows[0]!.id,
@@ -216,10 +309,12 @@ async function createRecommendation(
   const priceVersion = await harness.pool.query<{ id: string }>(
     `INSERT INTO price_table_versions
        (tenant_id, provider, instrument, version_label, effective_from, source_uri, status, checksum)
-     VALUES ($1, 'aws', 'aws_compute_savings_plan', $2, '2026-08-01', $3, 'draft', $4)
+     VALUES ($1, $2, $3, $4, '2026-08-01', $5, 'draft', $6)
      RETURNING id`,
     [
       tenantId,
+      provider,
+      instrument,
       `${label}-${randomUUID()} prices`,
       `prices/${label}.json`,
       randomUUID().replaceAll("-", "").padEnd(64, "0").slice(0, 64),
@@ -229,18 +324,26 @@ async function createRecommendation(
     `INSERT INTO price_table_items
        (tenant_id, price_table_version_id, provider, instrument, sku, region,
         term_months, payment_option, hourly_rate_cents, upfront_cents, coverage_rules)
-     VALUES ($1, $2, 'aws', 'aws_compute_savings_plan', $3, 'us-east-1',
-             12, 'no_upfront', 10, 0, '{"service_code":"AmazonEC2"}'::jsonb)`,
-    [tenantId, priceVersion.rows[0]!.id, `${label}-sku`],
+     VALUES ($1, $2, $3, $4, $5, $6,
+             12, 'no_upfront', 10, 0, $7::jsonb)`,
+    [
+      tenantId,
+      priceVersion.rows[0]!.id,
+      provider,
+      instrument,
+      `${label}-sku`,
+      region,
+      JSON.stringify({ service_code: serviceCode, usage_family: "compute" }),
+    ],
   );
   await harness.pool.query(
     `UPDATE price_table_versions
         SET status = 'superseded'
       WHERE tenant_id = $1
-        AND provider = 'aws'
-        AND instrument = 'aws_compute_savings_plan'
+        AND provider = $2
+        AND instrument = $3
         AND status = 'active'`,
-    [tenantId],
+    [tenantId, provider, instrument],
   );
   await harness.pool.query("UPDATE price_table_versions SET status = 'active' WHERE id = $1", [
     priceVersion.rows[0]!.id,
@@ -250,9 +353,9 @@ async function createRecommendation(
        (tenant_id, name, objective, max_downside_loss_cents, min_expected_savings_cents,
         max_utilization_gap_pct, approval_threshold_cents, allowed_instruments, config)
      VALUES ($1, $2, 'maximize_expected_savings', 500000, 10000, 12.50, 250000,
-             ARRAY['aws_compute_savings_plan']::text[], '{"liquidity_penalty_bps":100}'::jsonb)
+             ARRAY[$3]::text[], '{"liquidity_penalty_bps":100}'::jsonb)
      RETURNING id`,
-    [tenantId, `${label}-${randomUUID()} policy`],
+    [tenantId, `${label}-${randomUUID()} policy`, instrument],
   );
   await harness.pool.query("UPDATE optimizer_policies SET status = 'active' WHERE id = $1", [
     policy.rows[0]!.id,
@@ -261,13 +364,15 @@ async function createRecommendation(
     `INSERT INTO optimizer_runs
        (tenant_id, forecast_run_id, optimizer_policy_id, provider, instrument,
         price_table_version_ids, random_seed, input_snapshot_uri, output_uri, frontier_uri, status)
-     VALUES ($1, $2, $3, 'aws', 'aws_compute_savings_plan', $4::uuid[], 20260826,
-             $5, $6, $7, 'queued')
+     VALUES ($1, $2, $3, $4, $5, $6::uuid[], 20260826,
+             $7, $8, $9, 'queued')
      RETURNING id`,
     [
       tenantId,
       forecastRun.rows[0]!.id,
       policy.rows[0]!.id,
+      provider,
+      instrument,
       [priceVersion.rows[0]!.id],
       `optimizer-runs/${label}/input.json`,
       null,
@@ -311,13 +416,17 @@ async function createRecommendation(
         region, term_months, commitment_amount_cents, expected_savings_cents,
         p95_downside_loss_cents, utilization_p50_pct, utilization_p95_pct, confidence_score,
         risk_band, status, explanation, approval_required)
-     VALUES ($1, $2, 'buy', 'aws', 'aws_compute_savings_plan', 'AmazonEC2',
-             'us-east-1', 12, 1000000, $3::bigint, 40000, 86.25, 94.75, 0.9400,
-             $4, $5, '{"baseline_name":"on_demand","binding_constraints":["risk_budget"],"price_table_version_ids":[]}'::jsonb, $6)
+     VALUES ($1, $2, 'buy', $3, $4, $5,
+             $6, 12, 1000000, $7::bigint, 40000, 86.25, 94.75, 0.9400,
+             $8, $9, '{"baseline_name":"on_demand","binding_constraints":["risk_budget"],"price_table_version_ids":[]}'::jsonb, $10)
      RETURNING id`,
     [
       tenantId,
       run.rows[0]!.id,
+      provider,
+      instrument,
+      serviceCode,
+      region,
       overrides.expectedSavingsCents ?? "180000",
       overrides.riskBand ?? "low",
       overrides.status ?? "ready",

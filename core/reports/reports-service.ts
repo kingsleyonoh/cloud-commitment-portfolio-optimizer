@@ -7,6 +7,12 @@ import {
 } from "../recommendations/recommendations-input.js";
 import { toReportSummary } from "../recommendations/recommendations-service.js";
 import type { ReportsRepository } from "./reports-repository.js";
+import {
+  assertRecommendationReportTemplateInventory,
+  RECOMMENDATION_REPORT_TEMPLATE_ID,
+  renderStrictTemplate,
+  resolveReportTemplate,
+} from "./report-templates.js";
 import type {
   RecommendationReportData,
   RecommendationReportResponse,
@@ -22,19 +28,26 @@ export interface ReportsService {
   ): Promise<RecommendationReportResponse>;
 }
 
+export interface ReportsServiceOptions {
+  resolveTemplate?: (templateId: string, tenantId: string) => Promise<string>;
+}
+
 export function createReportsService(
   repository: ReportsRepository,
   objectStore: ObjectStore,
+  options: ReportsServiceOptions = {},
 ): ReportsService {
+  const templateResolver = options.resolveTemplate ?? resolveReportTemplate;
   return {
     get: (context, sourceType, sourceId) =>
-      get(repository, objectStore, context, sourceType, sourceId),
+      get(repository, objectStore, templateResolver, context, sourceType, sourceId),
   };
 }
 
 async function get(
   repository: ReportsRepository,
   objectStore: ObjectStore,
+  templateResolver: (templateId: string, tenantId: string) => Promise<string>,
   context: RequestContext,
   sourceTypeValue: unknown,
   sourceIdValue: unknown,
@@ -63,18 +76,26 @@ async function get(
       context.actorUserId,
     ),
   );
-  const renderedHtmlUri = `reports/recommendation/${queued.id}/recommendation_report_v1.html`;
-  const rendered = renderRecommendationReport(snapshot);
-  await safe(() => objectStore.put(renderedHtmlUri, Buffer.from(`${rendered}\n`, "utf8")));
-  const completed = await safe(() => repository.markRendered(queued.id, renderedHtmlUri));
-  return { report_snapshot: toReportSnapshot(completed), snapshot, rendered_html: rendered };
+  try {
+    const renderedHtmlUri = `reports/recommendation/${queued.id}/recommendation_report_v1.html`;
+    const template = await templateResolver(RECOMMENDATION_REPORT_TEMPLATE_ID, context.tenantId);
+    assertRecommendationReportTemplateInventory(template);
+    const rendered = renderStrictTemplate(template, snapshot);
+    const renderedHtml = `${rendered}\n`;
+    await safe(() => objectStore.put(renderedHtmlUri, Buffer.from(renderedHtml, "utf8")));
+    const completed = await safe(() => repository.markRendered(queued.id, renderedHtmlUri));
+    return { report_snapshot: toReportSnapshot(completed), snapshot, rendered_html: renderedHtml };
+  } catch (error) {
+    await safe(() => repository.markFailed(queued.id));
+    throw error;
+  }
 }
 
 export function captureRecommendationSnapshot(
   data: RecommendationReportData,
 ): Record<string, unknown> {
   return {
-    template_id: "recommendation_report:v1",
+    template_id: RECOMMENDATION_REPORT_TEMPLATE_ID,
     tenant: {
       display_name: data.tenant.displayName,
       full_legal_name: data.tenant.fullLegalName,
@@ -109,35 +130,6 @@ export function captureRecommendationSnapshot(
   };
 }
 
-function renderRecommendationReport(snapshot: Record<string, unknown>): string {
-  const tenant = objectAt(snapshot, "tenant");
-  const recommendation = objectAt(snapshot, "recommendation");
-  const frontier = objectAt(snapshot, "frontier");
-  const constraints = objectAt(snapshot, "constraints");
-  const priceTable = objectAt(snapshot, "price_table");
-  const forecast = objectAt(snapshot, "forecast");
-  return [
-    '<!doctype html><html><head><meta charset="utf-8"><title>Recommendation report</title></head><body>',
-    `<h1>Recommendation report</h1>`,
-    `<p>${escapeHtml(stringAt(tenant, "display_name"))} — ${escapeHtml(stringAt(tenant, "full_legal_name"))}</p>`,
-    `<p>Type: ${escapeHtml(stringAt(recommendation, "type"))}</p>`,
-    `<p>Provider: ${escapeHtml(stringAt(recommendation, "provider"))}</p>`,
-    `<p>Instrument: ${escapeHtml(stringAt(recommendation, "instrument"))}</p>`,
-    `<p>Term months: ${escapeHtml(String(recommendation.term_months))}</p>`,
-    `<p>Commitment amount: ${escapeHtml(stringAt(recommendation, "commitment_amount"))}</p>`,
-    `<p>Expected savings: ${escapeHtml(stringAt(recommendation, "expected_savings"))}</p>`,
-    `<p>P95 downside loss: ${escapeHtml(stringAt(recommendation, "p95_downside_loss"))}</p>`,
-    `<p>Risk band: ${escapeHtml(stringAt(recommendation, "risk_band"))}</p>`,
-    `<p>Confidence score: ${escapeHtml(stringAt(recommendation, "confidence_score"))}</p>`,
-    `<p>Baseline: ${escapeHtml(stringAt(frontier, "baseline_name"))}</p>`,
-    `<p>Net savings delta: ${escapeHtml(stringAt(frontier, "net_savings_delta"))}</p>`,
-    `<p>Binding constraints: ${escapeHtml(stringAt(constraints, "binding"))}</p>`,
-    `<p>Price table: ${escapeHtml(stringAt(priceTable, "version_label"))}</p>`,
-    `<p>Forecast quality: ${escapeHtml(stringAt(forecast, "quality_summary"))}</p>`,
-    "</body></html>",
-  ].join("");
-}
-
 function toReportSnapshot(row: ReportSnapshotRecord): ReportSnapshot {
   return { ...toReportSummary(row), snapshot_json: row.snapshotJson };
 }
@@ -156,28 +148,6 @@ async function safe<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-function objectAt(source: Record<string, unknown>, key: string): Record<string, unknown> {
-  const value = source[key];
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function stringAt(source: Record<string, unknown>, key: string): string {
-  const value = source[key];
-  if (typeof value !== "string") throw templateError(key);
-  return value;
-}
-
-function templateError(key: string): AppError {
-  return new AppError({
-    code: "REPORT_TEMPLATE_TOKEN_MISSING",
-    message: `Report template token is missing: ${key}.`,
-    statusCode: 500,
-    details: [],
-  });
-}
-
 function notFound(): AppError {
   return new AppError({
     code: "NOT_FOUND",
@@ -185,13 +155,4 @@ function notFound(): AppError {
     statusCode: 404,
     details: [],
   });
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
 }

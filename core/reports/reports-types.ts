@@ -25,8 +25,13 @@ export type RecommendationReportData = Readonly<{
   recommendation: {
     id: string;
     recommendationType: string;
-    provider: "aws";
-    instrument: "aws_compute_savings_plan";
+    provider: "aws" | "azure" | "gcp";
+    instrument:
+      | "aws_compute_savings_plan"
+      | "aws_reserved_instance"
+      | "azure_savings_plan"
+      | "azure_reservation"
+      | "gcp_committed_use_discount";
     termMonths: number;
     commitmentAmountCents: string;
     expectedSavingsCents: string;

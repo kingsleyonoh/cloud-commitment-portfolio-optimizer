@@ -18,6 +18,17 @@ const recommendationStatusSchema = {
   ],
 } as const;
 const riskBandSchema = { type: "string", enum: ["low", "medium", "high", "blocked"] } as const;
+const providerSchema = { type: "string", enum: ["aws", "azure", "gcp"] } as const;
+const instrumentSchema = {
+  type: "string",
+  enum: [
+    "aws_compute_savings_plan",
+    "aws_reserved_instance",
+    "azure_savings_plan",
+    "azure_reservation",
+    "gcp_committed_use_discount",
+  ],
+} as const;
 
 export const recommendationSchema = {
   type: "object",
@@ -51,8 +62,8 @@ export const recommendationSchema = {
       type: "string",
       enum: ["buy", "renew", "resize", "sell_or_exchange", "no_action", "manual_review"],
     },
-    provider: { type: "string", enum: ["aws"] },
-    instrument: { type: "string", enum: ["aws_compute_savings_plan"] },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     service_code: { type: "string" },
     region: { type: "string" },
     term_months: { type: "integer" },
@@ -114,8 +125,8 @@ export const recommendationsListQuerySchema = {
     cursor: { type: "string" },
     status: recommendationStatusSchema,
     risk_band: riskBandSchema,
-    provider: { type: "string", enum: ["aws"] },
-    instrument: { type: "string", enum: ["aws_compute_savings_plan"] },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     optimizer_run_id: uuidSchema,
   },
 } as const;

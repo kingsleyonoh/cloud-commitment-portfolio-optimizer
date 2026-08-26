@@ -1,8 +1,10 @@
 import { AppError } from "../shared/errors.js";
 import type {
   RecommendationListInput,
+  RecommendationProvider,
   RecommendationRiskBand,
   RecommendationStatus,
+  RecommendationInstrument,
 } from "./recommendations-types.js";
 
 const statuses = new Set<RecommendationStatus>([
@@ -16,14 +18,23 @@ const statuses = new Set<RecommendationStatus>([
   "expired",
 ]);
 const riskBands = new Set<RecommendationRiskBand>(["low", "medium", "high", "blocked"]);
+const providers = new Set<RecommendationProvider>(["aws", "azure", "gcp"]);
+const instruments = new Set<RecommendationInstrument>([
+  "aws_compute_savings_plan",
+  "aws_reserved_instance",
+  "azure_savings_plan",
+  "azure_reservation",
+  "gcp_committed_use_discount",
+]);
 
 export function parseRecommendationListQuery(query: unknown): RecommendationListInput {
   const source = object(query);
   const limit = optionalLimit(source.limit);
   const status = optionalSetValue(source.status, statuses);
   const riskBand = optionalSetValue(source.risk_band, riskBands);
-  const provider = optionalLiteral(source.provider, "aws");
-  const instrument = optionalLiteral(source.instrument, "aws_compute_savings_plan");
+  const provider = optionalSetValue(source.provider, providers);
+  const instrument = optionalSetValue(source.instrument, instruments);
+  if (provider && instrument && !isSupportedPair(provider, instrument)) throw invalid();
   const optimizerRunId =
     source.optimizer_run_id === undefined ? undefined : uuid(source.optimizer_run_id);
   const cursor = source.cursor === undefined ? undefined : parseCursor(source.cursor);
@@ -88,12 +99,6 @@ function optionalSetValue<T extends string>(
   return value as T;
 }
 
-function optionalLiteral<T extends string>(value: unknown, literal: T): T | undefined {
-  if (value === undefined) return undefined;
-  if (value !== literal) throw invalid();
-  return literal;
-}
-
 function uuid(value: unknown): string {
   if (
     typeof value !== "string" ||
@@ -126,4 +131,17 @@ function invalid(): AppError {
     statusCode: 400,
     details: [],
   });
+}
+
+function isSupportedPair(
+  provider: RecommendationProvider,
+  instrument: RecommendationInstrument,
+): boolean {
+  return (
+    (provider === "aws" &&
+      (instrument === "aws_compute_savings_plan" || instrument === "aws_reserved_instance")) ||
+    (provider === "azure" &&
+      (instrument === "azure_savings_plan" || instrument === "azure_reservation")) ||
+    (provider === "gcp" && instrument === "gcp_committed_use_discount")
+  );
 }

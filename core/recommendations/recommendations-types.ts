@@ -9,14 +9,21 @@ export type RecommendationStatus =
   | "expired";
 
 export type RecommendationRiskBand = "low" | "medium" | "high" | "blocked";
+export type RecommendationProvider = "aws" | "azure" | "gcp";
+export type RecommendationInstrument =
+  | "aws_compute_savings_plan"
+  | "aws_reserved_instance"
+  | "azure_savings_plan"
+  | "azure_reservation"
+  | "gcp_committed_use_discount";
 
 export type RecommendationRecord = Readonly<{
   id: string;
   optimizerRunId: string;
   recommendationType:
     "buy" | "renew" | "resize" | "sell_or_exchange" | "no_action" | "manual_review";
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+  provider: RecommendationProvider;
+  instrument: RecommendationInstrument;
   serviceCode: string;
   region: string;
   termMonths: number;
@@ -38,8 +45,8 @@ export type Recommendation = Readonly<{
   id: string;
   optimizer_run_id: string;
   recommendation_type: RecommendationRecord["recommendationType"];
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+  provider: RecommendationProvider;
+  instrument: RecommendationInstrument;
   service_code: string;
   region: string;
   term_months: number;
@@ -64,8 +71,8 @@ export type RecommendationListInput = Readonly<{
   cursor?: RecommendationCursorBoundary;
   status?: RecommendationStatus;
   riskBand?: RecommendationRiskBand;
-  provider?: "aws";
-  instrument?: "aws_compute_savings_plan";
+  provider?: RecommendationProvider;
+  instrument?: RecommendationInstrument;
   optimizerRunId?: string;
 }>;
 
