@@ -42,6 +42,7 @@ export const INTEGRATION_STATUS_LIMIT = 60;
 export const INTEGRATION_TEST_LIMIT = 10;
 export const SCENARIOS_LIST_LIMIT = 120;
 export const SCENARIOS_MUTATION_LIMIT = 60;
+export const AUDIT_LOG_LIST_LIMIT = 60;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -80,7 +81,8 @@ export type ProtectedUsersRoute =
   | "/api/integrations/status"
   | "/api/integrations/test-event"
   | "/api/scenarios"
-  | "/api/scenarios/{id}";
+  | "/api/scenarios/{id}"
+  | "/api/audit-log";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
 export interface ProtectedUsersLimiter {
@@ -221,6 +223,7 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   if (route.startsWith("/api/scenarios")) {
     return method === "GET" ? SCENARIOS_LIST_LIMIT : SCENARIOS_MUTATION_LIMIT;
   }
+  if (route === "/api/audit-log") return AUDIT_LOG_LIST_LIMIT;
   if (route.startsWith("/api/recommendations")) return RECOMMENDATIONS_LIST_LIMIT;
   if (route.startsWith("/api/reports")) return REPORTS_LIST_LIMIT;
   if (method === "PUT" && route === "/api/users/{id}/credentials/password") {

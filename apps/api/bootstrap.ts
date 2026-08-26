@@ -51,6 +51,8 @@ import {
   type ProtectedUsersLimiterConfig,
 } from "../../core/tenant/protected-users-limiter.js";
 import { buildApp, type BuildAppOptions } from "./app.js";
+import { createAuditRepository } from "../../core/audit/audit-repository.js";
+import { createAuditService } from "../../core/audit/audit-service.js";
 import {
   closeAuthenticationRuntime,
   createAuthenticationRuntime,
@@ -284,6 +286,10 @@ function applicationOptions(
     scenarios: {
       limiter: usersLimiter,
       service: createScenariosService(createScenariosRepository(database.pool)),
+    },
+    auditLog: {
+      limiter: usersLimiter,
+      service: createAuditService(createAuditRepository(database.pool)),
     },
     reports: {
       limiter: usersLimiter,

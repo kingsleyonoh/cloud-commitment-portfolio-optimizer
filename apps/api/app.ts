@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from "fastify";
 import { renderErrorPage } from "../web/error-page.js";
+import { registerAuditLogRoutes, type AuditLogRuntime } from "./routes/audit-log.js";
 import { AppError, normalizeError, toErrorEnvelope } from "../../core/shared/errors.js";
 import type { Logger } from "../../core/shared/logger.js";
 import { authPlugin, type AuthenticationRuntime } from "./plugins/auth.js";
@@ -66,6 +67,7 @@ export interface BuildAppOptions {
   notifications?: NotificationsRuntime;
   integrations?: IntegrationsRuntime;
   scenarios?: ScenariosRuntime;
+  auditLog?: AuditLogRuntime;
   reports?: ReportsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
@@ -134,6 +136,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.notifications) registerNotificationsRoutes(instance, options.notifications);
         if (options.integrations) registerIntegrationsRoutes(instance, options.integrations);
         if (options.scenarios) registerScenariosRoutes(instance, options.scenarios);
+        if (options.auditLog) registerAuditLogRoutes(instance, options.auditLog);
         if (options.reports) registerReportsRoutes(instance, options.reports);
         if (options.tenantProfile && options.users && options.apiKeys) {
           registerSettingsRoute(instance, {

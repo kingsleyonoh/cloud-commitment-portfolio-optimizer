@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { Pool } from "pg";
 
 import { buildApp } from "../../../apps/api/app.js";
+import { createAuditRepository } from "../../../core/audit/audit-repository.js";
+import { createAuditService } from "../../../core/audit/audit-service.js";
 import { runMigrations } from "../../../core/db/migrations.js";
 import { createOptimizerRunsRepository } from "../../../core/optimizer-runs/optimizer-runs-repository.js";
 import { createOptimizerRunsService } from "../../../core/optimizer-runs/optimizer-runs-service.js";
@@ -106,6 +108,10 @@ export async function createOptimizerRunsHarness(prefix: string): Promise<Optimi
     scenarios: {
       limiter: createLocalProtectedUsersLimiter(),
       service: createScenariosService(createScenariosRepository(pool)),
+    },
+    auditLog: {
+      limiter: createLocalProtectedUsersLimiter(),
+      service: createAuditService(createAuditRepository(pool)),
     },
   });
   return {
