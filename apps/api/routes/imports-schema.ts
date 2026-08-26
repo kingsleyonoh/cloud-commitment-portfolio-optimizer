@@ -51,8 +51,8 @@ export const importCreateBodySchema = {
   additionalProperties: false,
   required: ["source", "format", "object_uri", "cloud_account_id", "control_totals"],
   properties: {
-    source: { type: "string", enum: ["synthetic", "aws_cur"] },
-    format: { type: "string", const: "csv" },
+    source: { type: "string", enum: ["synthetic", "aws_cur", "azure_export", "gcp_export"] },
+    format: { type: "string", enum: ["csv", "parquet", "json_api_snapshot", "manual_override"] },
     object_uri: { type: "string", minLength: 1, maxLength: 2048 },
     cloud_account_id: { type: "string", format: "uuid" },
     control_totals: { type: "array", items: importControlTotalSchema, maxItems: 1000 },
@@ -65,8 +65,8 @@ export const importsListQuerySchema = {
   properties: {
     limit: { type: "string", pattern: "^(?:[1-9]|[1-9][0-9]|100)$" },
     cursor: { type: "string", minLength: 1, maxLength: 512 },
-    source: { type: "string", enum: ["synthetic", "aws_cur"] },
-    format: { type: "string", const: "csv" },
+    source: { type: "string", enum: ["synthetic", "aws_cur", "azure_export", "gcp_export"] },
+    format: { type: "string", enum: ["csv", "parquet", "json_api_snapshot", "manual_override"] },
     status: {
       type: "string",
       enum: ["queued", "processing", "completed", "failed", "quarantined", "cancelled"],

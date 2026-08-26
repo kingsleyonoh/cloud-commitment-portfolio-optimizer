@@ -28,6 +28,8 @@ export interface ImportsHarness {
   tenantA: string;
   tenantB: string;
   accountA: string;
+  azureAccountA: string;
+  gcpAccountA: string;
   accountB: string;
   actors: Map<string, string>;
   analystApiKey: string;
@@ -41,6 +43,8 @@ export async function createImportsHarness(prefix: string): Promise<ImportsHarne
   const tenantA = await insertTenant(pool, "Imports tenant A");
   const tenantB = await insertTenant(pool, "Imports tenant B");
   const accountA = await insertCloudAccount(pool, tenantA, "aws", "imports-a");
+  const azureAccountA = await insertCloudAccount(pool, tenantA, "azure", "imports-azure-a");
+  const gcpAccountA = await insertCloudAccount(pool, tenantA, "gcp", "imports-gcp-a");
   const accountB = await insertCloudAccount(pool, tenantB, "aws", "imports-b");
   const actors = new Map<string, string>();
   for (const role of [
@@ -86,6 +90,8 @@ export async function createImportsHarness(prefix: string): Promise<ImportsHarne
     tenantA,
     tenantB,
     accountA,
+    azureAccountA,
+    gcpAccountA,
     accountB,
     actors,
     analystApiKey: credential.plaintext,

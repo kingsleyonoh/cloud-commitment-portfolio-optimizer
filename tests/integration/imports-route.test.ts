@@ -212,14 +212,14 @@ describe("POST /api/imports synthetic CSV", () => {
       },
       {
         source: "azure_export",
-        format: "csv",
-        object_uri: "x.csv",
+        format: "manual_override",
+        object_uri: "x.json",
         cloud_account_id: harness.accountA,
         control_totals: [],
       },
       {
         source: "aws_cur",
-        format: "json_api_snapshot",
+        format: "manual_override",
         object_uri: "x.json",
         cloud_account_id: harness.accountA,
         control_totals: [],
@@ -380,6 +380,223 @@ describe("POST /api/imports AWS CUR CSV", () => {
   });
 });
 
+describe("POST /api/imports Phase 2 source-format matrix", () => {
+  const cases = [
+    {
+      name: "AWS CUR Parquet",
+      source: "aws_cur",
+      format: "parquet",
+      fixture: "tests/fixtures/aws/cur-valid.parquet",
+      objectUri: "imports/aws/cur-valid.parquet",
+      account: () => harness.accountA,
+      total: total("aws", "AmazonEC2", "us-east-1", "2026-05", "2.00000000", "120", "90", "30"),
+      schemaVersion: "aws_cur_parquet:v1",
+    },
+    {
+      name: "AWS CUR JSON API snapshot",
+      source: "aws_cur",
+      format: "json_api_snapshot",
+      fixture: "tests/fixtures/aws/cur-valid.json",
+      objectUri: "imports/aws/cur-valid.json",
+      account: () => harness.accountA,
+      total: total("aws", "AmazonEC2", "us-east-1", "2026-05", "2.00000000", "120", "90", "30"),
+      schemaVersion: "aws_cur_json_api_snapshot:v1",
+    },
+    {
+      name: "Azure Cost Management CSV",
+      source: "azure_export",
+      format: "csv",
+      fixture: "tests/fixtures/azure/export-valid.csv",
+      objectUri: "imports/azure/export-valid.csv",
+      account: () => harness.azureAccountA,
+      total: total(
+        "azure",
+        "Microsoft.Compute",
+        "eastus",
+        "2026-05",
+        "3.00000000",
+        "240",
+        "180",
+        "60",
+      ),
+      schemaVersion: "azure_export_csv:v1",
+    },
+    {
+      name: "Azure Cost Management Parquet",
+      source: "azure_export",
+      format: "parquet",
+      fixture: "tests/fixtures/azure/export-valid.parquet",
+      objectUri: "imports/azure/export-valid.parquet",
+      account: () => harness.azureAccountA,
+      total: total(
+        "azure",
+        "Microsoft.Compute",
+        "eastus",
+        "2026-05",
+        "3.00000000",
+        "240",
+        "180",
+        "60",
+      ),
+      schemaVersion: "azure_export_parquet:v1",
+    },
+    {
+      name: "Azure Cost Management JSON API snapshot",
+      source: "azure_export",
+      format: "json_api_snapshot",
+      fixture: "tests/fixtures/azure/export-valid.json",
+      objectUri: "imports/azure/export-valid.json",
+      account: () => harness.azureAccountA,
+      total: total(
+        "azure",
+        "Microsoft.Compute",
+        "eastus",
+        "2026-05",
+        "3.00000000",
+        "240",
+        "180",
+        "60",
+      ),
+      schemaVersion: "azure_export_json_api_snapshot:v1",
+    },
+    {
+      name: "GCP Billing Export CSV",
+      source: "gcp_export",
+      format: "csv",
+      fixture: "tests/fixtures/gcp/export-valid.csv",
+      objectUri: "imports/gcp/export-valid.csv",
+      account: () => harness.gcpAccountA,
+      total: total(
+        "gcp",
+        "Compute Engine",
+        "us-central1",
+        "2026-05",
+        "4.00000000",
+        "320",
+        "224",
+        "96",
+      ),
+      schemaVersion: "gcp_export_csv:v1",
+    },
+    {
+      name: "GCP Billing Export Parquet",
+      source: "gcp_export",
+      format: "parquet",
+      fixture: "tests/fixtures/gcp/export-valid.parquet",
+      objectUri: "imports/gcp/export-valid.parquet",
+      account: () => harness.gcpAccountA,
+      total: total(
+        "gcp",
+        "Compute Engine",
+        "us-central1",
+        "2026-05",
+        "4.00000000",
+        "320",
+        "224",
+        "96",
+      ),
+      schemaVersion: "gcp_export_parquet:v1",
+    },
+    {
+      name: "GCP Billing Export JSON API snapshot",
+      source: "gcp_export",
+      format: "json_api_snapshot",
+      fixture: "tests/fixtures/gcp/export-valid.json",
+      objectUri: "imports/gcp/export-valid.json",
+      account: () => harness.gcpAccountA,
+      total: total(
+        "gcp",
+        "Compute Engine",
+        "us-central1",
+        "2026-05",
+        "4.00000000",
+        "320",
+        "224",
+        "96",
+      ),
+      schemaVersion: "gcp_export_json_api_snapshot:v1",
+    },
+    {
+      name: "Synthetic Scenario Generator Parquet",
+      source: "synthetic",
+      format: "parquet",
+      fixture: "tests/fixtures/synthetic/usage-valid.parquet",
+      objectUri: "imports/synthetic/usage-valid.parquet",
+      account: () => harness.accountA,
+      total: total("aws", "AmazonEC2", "us-east-1", "2026-05", "2.00000000", "120", "90", "30"),
+      schemaVersion: "synthetic_parquet:v1",
+    },
+    {
+      name: "Synthetic Scenario Generator JSON API snapshot",
+      source: "synthetic",
+      format: "json_api_snapshot",
+      fixture: "tests/fixtures/synthetic/usage-valid.json",
+      objectUri: "imports/synthetic/usage-valid.json",
+      account: () => harness.accountA,
+      total: total("aws", "AmazonEC2", "us-east-1", "2026-05", "2.00000000", "120", "90", "30"),
+      schemaVersion: "synthetic_json_api_snapshot:v1",
+    },
+    {
+      name: "Synthetic Scenario Generator manual override",
+      source: "synthetic",
+      format: "manual_override",
+      fixture: "tests/fixtures/synthetic/manual-override-valid.json",
+      objectUri: "imports/synthetic/manual-override-valid.json",
+      account: () => harness.accountA,
+      total: total("aws", "AmazonEC2", "us-east-1", "2026-05", "1.00000000", "100", "70", "30"),
+      schemaVersion: "synthetic_manual_override:v1",
+    },
+  ] as const;
+
+  it.each(cases)("$name imports with exact control-total reconciliation", async (entry) => {
+    await putFixtureObject(harness, entry.objectUri, resolve(entry.fixture));
+    const response = await postImport({
+      source: entry.source,
+      format: entry.format,
+      object_uri: entry.objectUri,
+      cloud_account_id: entry.account(),
+      control_totals: [entry.total],
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      source: entry.source,
+      format: entry.format,
+      status: "completed",
+      schema_version: entry.schemaVersion,
+      line_count: "1",
+      error_details: {},
+      parser_warnings: [],
+    });
+    expect(await usageControlTotals(response.json().id)).toEqual([
+      {
+        provider: entry.total.provider,
+        service_code: entry.total.service_code,
+        region: entry.total.region,
+        month: entry.total.month,
+        line_count: "1",
+        usage_quantity: entry.total.usage_quantity,
+        on_demand_cost_cents: entry.total.on_demand_cost_cents,
+        realized_cost_cents: entry.total.realized_cost_cents,
+        commitment_applied_cents: entry.total.commitment_applied_cents,
+      },
+    ]);
+  });
+
+  it("keeps native CUR export unavailable until its Phase 3 owner", async () => {
+    const response = await postImport({
+      source: "aws_cur",
+      format: "native_cur",
+      object_uri: "imports/aws/native-cur.json",
+      cloud_account_id: harness.accountA,
+      control_totals: [],
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
 describe("GET /api/imports", () => {
   it("lists only tenant imports with filters, warnings, and stable cursor pagination", async () => {
     await putFixtureObject(
@@ -447,8 +664,8 @@ describe("GET /api/imports", () => {
       `tenant_id=${harness.tenantB}`,
       "limit=0",
       "status=queued%00",
-      "source=azure_export",
-      "format=json_api_snapshot",
+      "source=oracle_export",
+      "format=native_cur",
       "unknown=value",
     ]) {
       const response = await harness.app.inject({
@@ -473,25 +690,29 @@ describe("GET /api/imports/{id}", () => {
       "imports/synthetic/detail-warning.csv",
       resolve("tests/fixtures/synthetic/usage-warning.csv"),
     );
-    const created = await postImport({
-      source: "synthetic",
-      format: "csv",
-      object_uri: "imports/synthetic/detail-warning.csv",
-      cloud_account_id: harness.accountA,
-      control_totals: [
-        {
-          provider: "aws",
-          service_code: "AmazonEC2",
-          region: "us-west-2",
-          month: "2026-02",
-          line_count: "1",
-          usage_quantity: "1.00000000",
-          on_demand_cost_cents: "20",
-          realized_cost_cents: "15",
-          commitment_applied_cents: "10",
-        },
-      ],
-    });
+    const created = await postImport(
+      {
+        source: "synthetic",
+        format: "csv",
+        object_uri: "imports/synthetic/detail-warning.csv",
+        cloud_account_id: harness.accountA,
+        control_totals: [
+          {
+            provider: "aws",
+            service_code: "AmazonEC2",
+            region: "us-west-2",
+            month: "2026-02",
+            line_count: "1",
+            usage_quantity: "1.00000000",
+            on_demand_cost_cents: "20",
+            realized_cost_cents: "15",
+            commitment_applied_cents: "10",
+          },
+        ],
+      },
+      { "x-api-key": harness.analystApiKey },
+    );
+    expect(created.statusCode).toBe(201);
     const hidden = await harness.pool.query<{ id: string }>(
       `INSERT INTO import_batches
          (tenant_id, cloud_account_id, source, format, status, object_uri, schema_version, line_count)
@@ -561,4 +782,27 @@ async function usageControlTotals(importBatchId: string) {
     [importBatchId],
   );
   return result.rows;
+}
+
+function total(
+  provider: "aws" | "azure" | "gcp",
+  serviceCode: string,
+  region: string,
+  month: string,
+  usageQuantity: string,
+  onDemandCostCents: string,
+  realizedCostCents: string,
+  commitmentAppliedCents: string,
+) {
+  return {
+    provider,
+    service_code: serviceCode,
+    region,
+    month,
+    line_count: "1",
+    usage_quantity: usageQuantity,
+    on_demand_cost_cents: onDemandCostCents,
+    realized_cost_cents: realizedCostCents,
+    commitment_applied_cents: commitmentAppliedCents,
+  };
 }

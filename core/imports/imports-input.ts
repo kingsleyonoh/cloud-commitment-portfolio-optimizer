@@ -1,8 +1,10 @@
 import { AppError } from "../shared/errors.js";
 import type {
+  ImportFormat,
   ImportBatchListInput,
   ImportControlTotal,
   ImportCreateInput,
+  ImportSource,
   ImportStatus,
 } from "./imports-types.js";
 
@@ -18,9 +20,10 @@ export function parseImportCreateBody(body: unknown): ImportCreateInput {
     object,
     new Set(["source", "format", "object_uri", "cloud_account_id", "control_totals"]),
   );
+  const source = parseSource(object.source);
+  const format = parseCreateFormat(object.format);
   if (
-    (object.source !== "synthetic" && object.source !== "aws_cur") ||
-    object.format !== "csv" ||
+    !isAllowedSourceFormat(source, format) ||
     typeof object.object_uri !== "string" ||
     typeof object.cloud_account_id !== "string" ||
     !Array.isArray(object.control_totals)
@@ -28,8 +31,8 @@ export function parseImportCreateBody(body: unknown): ImportCreateInput {
     throw invalid();
   }
   return Object.freeze({
-    source: object.source,
-    format: "csv",
+    source,
+    format,
     objectUri: objectKey(object.object_uri),
     cloudAccountId: uuidValue(object.cloud_account_id),
     controlTotals: Object.freeze(object.control_totals.map(controlTotal)),
@@ -114,14 +117,45 @@ function parseLimit(value: unknown): number {
   return Number.parseInt(value, 10);
 }
 
-function parseSource(value: unknown): "synthetic" | "aws_cur" {
-  if (value !== "synthetic" && value !== "aws_cur") throw invalid();
+function parseSource(value: unknown): ImportSource {
+  if (
+    value !== "synthetic" &&
+    value !== "aws_cur" &&
+    value !== "azure_export" &&
+    value !== "gcp_export"
+  ) {
+    throw invalid();
+  }
   return value;
 }
 
-function parseFormat(value: unknown): "csv" {
-  if (value !== "csv") throw invalid();
-  return "csv";
+function parseFormat(value: unknown): Exclude<ImportFormat, "native_cur"> {
+  if (
+    value !== "csv" &&
+    value !== "parquet" &&
+    value !== "json_api_snapshot" &&
+    value !== "manual_override"
+  ) {
+    throw invalid();
+  }
+  return value;
+}
+
+function parseCreateFormat(value: unknown): Exclude<ImportFormat, "native_cur"> {
+  return parseFormat(value);
+}
+
+function isAllowedSourceFormat(
+  source: ImportSource,
+  format: Exclude<ImportFormat, "native_cur">,
+): boolean {
+  if (format === "manual_override") return source === "synthetic";
+  if (source === "synthetic") {
+    return format === "csv" || format === "parquet" || format === "json_api_snapshot";
+  }
+  return source === "aws_cur" || source === "azure_export" || source === "gcp_export"
+    ? format === "csv" || format === "parquet" || format === "json_api_snapshot"
+    : false;
 }
 
 function parseStatus(value: unknown): ImportStatus {

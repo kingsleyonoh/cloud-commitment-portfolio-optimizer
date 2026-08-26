@@ -20,7 +20,7 @@ export interface ImportsRepository {
   ): Promise<ImportCloudAccountRecord | null>;
   list(tenantId: string, input: ImportBatchListInput): Promise<ImportBatchRecord[]>;
   get(tenantId: string, importBatchId: string): Promise<ImportBatchRecord | null>;
-  createSyntheticCsvImport(input: {
+  createImport(input: {
     tenantId: string;
     createdByUserId: string | null;
     create: ImportCreateInput;
@@ -56,7 +56,7 @@ export function createImportsRepository(pool: Pool): ImportsRepository {
     getCloudAccount: (tenantId, cloudAccountId) => getCloudAccount(pool, tenantId, cloudAccountId),
     list: (tenantId, input) => list(pool, tenantId, input),
     get: (tenantId, importBatchId) => get(pool, tenantId, importBatchId),
-    createSyntheticCsvImport: (input) =>
+    createImport: (input) =>
       withTenantTransaction(pool, input.tenantId, (client) => createImport(client, input)),
   };
 }
@@ -143,7 +143,7 @@ async function createImport(
       input.create.source,
       input.create.format,
       input.create.objectUri,
-      schemaVersion(input.create.source),
+      schemaVersion(input.create.source, input.create.format),
       input.createdByUserId,
     ],
   );
@@ -191,8 +191,11 @@ async function createImport(
   });
 }
 
-function schemaVersion(source: ImportCreateInput["source"]): string {
-  return source === "aws_cur" ? "aws_cur_csv:v1" : "synthetic_csv:v1";
+function schemaVersion(
+  source: ImportCreateInput["source"],
+  format: ImportCreateInput["format"],
+): string {
+  return `${source}_${format}:v1`;
 }
 
 async function updateBatch(

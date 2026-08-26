@@ -1,0 +1,19 @@
+{
+  "schema_version": "manual_usage_override:v1",
+  "rows": [
+    {
+      "provider": "aws",
+      "service_code": "AmazonEC2",
+      "sku": "manual-csp-test",
+      "region": "us-east-1",
+      "usage_start": "2026-05-01T00:00:00Z",
+      "usage_end": "2026-05-01T01:00:00Z",
+      "usage_quantity": "1.00000000",
+      "usage_unit": "Hrs",
+      "on_demand_cost_cents": "100",
+      "realized_cost_cents": "70",
+      "commitment_applied_cents": "30",
+      "tags": { "scenario": "manual-small-override" }
+    }
+  ]
+}

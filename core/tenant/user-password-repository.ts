@@ -39,6 +39,7 @@ async function passwordTransaction(
     open = true;
     await lockTenant(client, input.tenantId);
     await lockTarget(client, input.tenantId, input.targetUserId);
+    await lockPasswordCredential(client, input.tenantId, input.targetUserId);
     const existed = await lockCredential(client, input.tenantId, input.targetUserId);
     const timestamp = await transactionTimestamp(client);
     await writeCredential(client, input, timestamp, existed);
@@ -53,6 +54,16 @@ async function passwordTransaction(
   } finally {
     client.release();
   }
+}
+
+async function lockPasswordCredential(
+  client: PoolClient,
+  tenantId: string,
+  targetUserId: string,
+): Promise<void> {
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `${tenantId}:${targetUserId}:password`,
+  ]);
 }
 
 async function lockTenant(client: PoolClient, tenantId: string): Promise<void> {
