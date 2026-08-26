@@ -26,6 +26,8 @@ export const FORECAST_MODEL_MUTATION_LIMIT = 60;
 export const FORECAST_RUN_MUTATION_LIMIT = 30;
 export const OPTIMIZER_POLICIES_LIST_LIMIT = 120;
 export const OPTIMIZER_POLICIES_MUTATION_LIMIT = 30;
+export const OPTIMIZER_RUNS_LIST_LIMIT = 120;
+export const OPTIMIZER_RUNS_MUTATION_LIMIT = 20;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -45,7 +47,9 @@ export type ProtectedUsersRoute =
   | "/api/forecast-runs"
   | "/api/forecast-runs/{id}"
   | "/api/optimizer-policies"
-  | "/api/optimizer-policies/{id}";
+  | "/api/optimizer-policies/{id}"
+  | "/api/optimizer-runs"
+  | "/api/optimizer-runs/{id}";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
 export interface ProtectedUsersLimiter {
@@ -163,6 +167,9 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   }
   if (route.startsWith("/api/optimizer-policies")) {
     return method === "GET" ? OPTIMIZER_POLICIES_LIST_LIMIT : OPTIMIZER_POLICIES_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/optimizer-runs")) {
+    return method === "GET" ? OPTIMIZER_RUNS_LIST_LIMIT : OPTIMIZER_RUNS_MUTATION_LIMIT;
   }
   if (method === "PUT" && route === "/api/users/{id}/credentials/password") {
     return PASSWORD_PROVISION_LIMIT;

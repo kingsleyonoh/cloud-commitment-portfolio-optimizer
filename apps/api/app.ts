@@ -20,6 +20,7 @@ import {
   registerOptimizerPoliciesRoutes,
   type OptimizerPoliciesRuntime,
 } from "./routes/optimizer-policies.js";
+import { registerOptimizerRunsRoutes, type OptimizerRunsRuntime } from "./routes/optimizer-runs.js";
 import { registerPriceTablesRoutes, type PriceTablesRuntime } from "./routes/price-tables.js";
 import {
   registerTenantRegistrationRoute,
@@ -45,6 +46,7 @@ export interface BuildAppOptions {
   priceTables?: PriceTablesRuntime;
   forecasts?: ForecastsRuntime;
   optimizerPolicies?: OptimizerPoliciesRuntime;
+  optimizerRuns?: OptimizerRunsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
 
@@ -102,6 +104,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.optimizerPolicies) {
           registerOptimizerPoliciesRoutes(instance, options.optimizerPolicies);
         }
+        if (options.optimizerRuns) registerOptimizerRunsRoutes(instance, options.optimizerRuns);
         await options.protectedRoutes?.(instance);
       },
     });
