@@ -21,6 +21,18 @@ const uuidSchema = {
   pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
 } as const;
 
+const providerSchema = { type: "string", enum: ["aws", "azure", "gcp"] } as const;
+const instrumentSchema = {
+  type: "string",
+  enum: [
+    "aws_compute_savings_plan",
+    "aws_reserved_instance",
+    "azure_savings_plan",
+    "azure_reservation",
+    "gcp_committed_use_discount",
+  ],
+} as const;
+
 export const optimizerRunCreateBodySchema = {
   type: "object",
   additionalProperties: false,
@@ -29,8 +41,8 @@ export const optimizerRunCreateBodySchema = {
     forecast_run_id: uuidSchema,
     scenario_id: uuidSchema,
     optimizer_policy_id: uuidSchema,
-    provider: { type: "string", const: "aws" },
-    instrument: { type: "string", const: "aws_compute_savings_plan" },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     price_table_version_ids: {
       type: "array",
       minItems: 1,
@@ -79,8 +91,8 @@ export const optimizerRunSchema = {
     forecast_run_id: { type: "string", format: "uuid" },
     scenario_id: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
     optimizer_policy_id: { type: "string", format: "uuid" },
-    provider: { type: "string", const: "aws" },
-    instrument: { type: "string", const: "aws_compute_savings_plan" },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     price_table_version_ids: { type: "array", items: { type: "string", format: "uuid" } },
     status: {
       type: "string",

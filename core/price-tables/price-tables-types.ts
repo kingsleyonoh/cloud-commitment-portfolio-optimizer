@@ -1,7 +1,12 @@
-export type PriceTableProvider = "aws";
-export type PriceTableInstrument = "aws_compute_savings_plan";
+export type PriceTableProvider = "aws" | "azure" | "gcp";
+export type PriceTableInstrument =
+  | "aws_compute_savings_plan"
+  | "aws_reserved_instance"
+  | "azure_savings_plan"
+  | "azure_reservation"
+  | "gcp_committed_use_discount";
 export type PriceTableStatus = "draft" | "active" | "superseded" | "blocked";
-export type PriceTablePaymentOption = "no_upfront" | "partial_upfront" | "all_upfront";
+export type PriceTablePaymentOption = "no_upfront" | "partial_upfront" | "all_upfront" | "monthly";
 
 export type PriceTableVersionRecord = Readonly<{
   id: string;

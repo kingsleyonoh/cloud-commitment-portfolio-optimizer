@@ -1,5 +1,10 @@
-export type OptimizerRunProvider = "aws";
-export type OptimizerRunInstrument = "aws_compute_savings_plan";
+export type OptimizerRunProvider = "aws" | "azure" | "gcp";
+export type OptimizerRunInstrument =
+  | "aws_compute_savings_plan"
+  | "aws_reserved_instance"
+  | "azure_savings_plan"
+  | "azure_reservation"
+  | "gcp_committed_use_discount";
 export type OptimizerRunStatus =
   "queued" | "running" | "completed" | "failed" | "infeasible" | "cancelled";
 

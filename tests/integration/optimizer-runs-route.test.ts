@@ -183,6 +183,43 @@ describe("POST /api/optimizer-runs", () => {
     }
     await expect(countRuns()).resolves.toBe(before);
   });
+
+  it.each([
+    ["aws", "aws_reserved_instance"],
+    ["azure", "azure_savings_plan"],
+    ["azure", "azure_reservation"],
+    ["gcp", "gcp_committed_use_discount"],
+  ] as const)(
+    "queues a %s %s optimizer run with explicit active prices",
+    async (provider, instrument) => {
+      const fixture = await createRunFixture(`${provider}-${instrument}`, provider, instrument);
+      const response = await postRun({
+        forecast_run_id: fixture.forecastRunId,
+        optimizer_policy_id: fixture.policyId,
+        provider,
+        instrument,
+        price_table_version_ids: [fixture.priceVersionId],
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({
+        forecast_run_id: fixture.forecastRunId,
+        optimizer_policy_id: fixture.policyId,
+        provider,
+        instrument,
+        price_table_version_ids: [fixture.priceVersionId],
+        status: "queued",
+      });
+      const snapshot = JSON.parse(
+        (await harness.objectStore.get(response.json().input_snapshot_uri)).toString("utf8"),
+      );
+      expect(snapshot).toMatchObject({
+        provider,
+        instrument,
+        price_table_versions: [{ id: fixture.priceVersionId, provider, instrument }],
+      });
+    },
+  );
 });
 
 describe("GET /api/optimizer-runs/{id}", () => {
@@ -225,14 +262,23 @@ describe("GET /api/optimizer-runs/{id}", () => {
   });
 });
 
-async function createRunFixture(label: string) {
+async function createRunFixture(
+  label: string,
+  provider: "aws" | "azure" | "gcp" = "aws",
+  instrument:
+    | "aws_compute_savings_plan"
+    | "aws_reserved_instance"
+    | "azure_savings_plan"
+    | "azure_reservation"
+    | "gcp_committed_use_discount" = "aws_compute_savings_plan",
+) {
   const forecastModelId = await insertForecastModel(label);
   const forecastRunId = await insertForecastRun(forecastModelId, "completed");
-  const policyId = await insertPolicy(label, ["aws_compute_savings_plan"]);
+  const policyId = await insertPolicy(label, [instrument]);
   await harness.pool.query("UPDATE optimizer_policies SET status = 'active' WHERE id = $1", [
     policyId,
   ]);
-  const priceVersionId = await insertPriceVersion(label, harness.tenantA);
+  const priceVersionId = await insertPriceVersion(label, harness.tenantA, provider, instrument);
   return { forecastModelId, forecastRunId, policyId, priceVersionId };
 }
 
@@ -329,16 +375,28 @@ async function insertPolicy(label: string, instruments: readonly string[]): Prom
   return result.rows[0]!.id;
 }
 
-async function insertPriceVersion(label: string, tenantId: string): Promise<string> {
+async function insertPriceVersion(
+  label: string,
+  tenantId: string,
+  provider: "aws" | "azure" | "gcp" = "aws",
+  instrument:
+    | "aws_compute_savings_plan"
+    | "aws_reserved_instance"
+    | "azure_savings_plan"
+    | "azure_reservation"
+    | "gcp_committed_use_discount" = "aws_compute_savings_plan",
+): Promise<string> {
   const currentDay = String(day++).padStart(2, "0");
   const result = await harness.pool.query<{ id: string }>(
     `INSERT INTO price_table_versions
        (tenant_id, provider, instrument, version_label, effective_from, effective_to,
         source_uri, status, checksum)
-     VALUES ($1, 'aws', 'aws_compute_savings_plan', $2, $3::date, $3::date, $4, 'draft', $5)
+     VALUES ($1, $2, $3, $4, $5::date, $5::date, $6, 'draft', $7)
      RETURNING id`,
     [
       tenantId,
+      provider,
+      instrument,
       `${label}-${randomUUID()} prices`,
       `2026-08-${currentDay}`,
       `prices/${label}-${currentDay}.json`,

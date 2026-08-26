@@ -68,13 +68,10 @@ describe("POST /api/price-tables", () => {
 
   it("rejects unsupported provider/instrument, future formats, bad economics, and API keys", async () => {
     for (const payload of [
-      { ...validPriceTableBody("bad-provider"), provider: "azure" },
-      { ...validPriceTableBody("bad-instrument"), instrument: "aws_reserved_instance" },
+      { ...validPriceTableBody("bad-provider"), provider: "oracle" },
+      { ...validPriceTableBody("bad-instrument"), instrument: "spot_instance" },
+      { ...validPriceTableBody("bad-pair"), provider: "azure" },
       { ...validPriceTableBody("bad-term"), items: [{ ...validItem(), term_months: 24 }] },
-      {
-        ...validPriceTableBody("bad-payment"),
-        items: [{ ...validItem(), payment_option: "monthly" }],
-      },
       {
         ...validPriceTableBody("raw-secret"),
         items: [{ ...validItem(), coverage_rules: { secret: "x" } }],
@@ -195,8 +192,8 @@ describe("GET /api/price-tables", () => {
     for (const query of [
       `tenant_id=${harness.tenantB}`,
       "limit=0",
-      "provider=azure",
-      "instrument=aws_reserved_instance",
+      "provider=oracle",
+      "instrument=spot_instance",
       "status=queued",
       "unknown=value",
     ]) {
@@ -213,6 +210,43 @@ describe("GET /api/price-tables", () => {
       });
     }
   });
+
+  it.each([
+    ["aws", "aws_reserved_instance", "AmazonEC2", "us-west-2"],
+    ["azure", "azure_savings_plan", "Microsoft.Compute", "eastus"],
+    ["azure", "azure_reservation", "Microsoft.Compute", "eastus2"],
+    ["gcp", "gcp_committed_use_discount", "Compute Engine", "us-central1"],
+  ] as const)(
+    "creates and lists a %s %s price table",
+    async (provider, instrument, serviceCode, region) => {
+      const payload = providerPriceTableBody(
+        `${instrument}-route-${Date.now()}`,
+        provider,
+        instrument,
+        serviceCode,
+        region,
+      );
+      const created = await postPriceTable(payload);
+
+      expect(created.statusCode).toBe(201);
+      expect(created.json()).toMatchObject({
+        provider,
+        instrument,
+        status: "draft",
+        item_count: "1",
+      });
+
+      const listed = await harness.app.inject({
+        method: "GET",
+        url: `/api/price-tables?provider=${provider}&instrument=${instrument}&limit=10`,
+        headers: { "x-api-key": harness.analystApiKey },
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().price_tables).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: created.json().id })]),
+      );
+    },
+  );
 });
 
 function validPriceTableBody(versionLabel: string): Record<string, unknown> {
@@ -246,6 +280,34 @@ function validItem(): Record<string, unknown> {
     hourly_rate_cents: "10",
     upfront_cents: "0",
     coverage_rules: { service_code: "AmazonEC2", usage_family: "compute" },
+  };
+}
+
+function providerPriceTableBody(
+  versionLabel: string,
+  provider: string,
+  instrument: string,
+  serviceCode: string,
+  region: string,
+): Record<string, unknown> {
+  return {
+    provider,
+    instrument,
+    version_label: versionLabel,
+    effective_from: "2026-08-01",
+    effective_to: null,
+    source_uri: `prices/${provider}/${instrument}.json`,
+    items: [
+      {
+        sku: `${instrument}:standard`,
+        region,
+        term_months: 12,
+        payment_option: "monthly",
+        hourly_rate_cents: "10",
+        upfront_cents: "0",
+        coverage_rules: { service_code: serviceCode, usage_family: "compute" },
+      },
+    ],
   };
 }
 

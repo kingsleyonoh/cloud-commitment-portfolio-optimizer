@@ -272,29 +272,108 @@ describe("optimizer worker", () => {
     });
     expect(JSON.stringify(failed.rows[0])).not.toMatch(/boom|secret|credential|stack/iu);
   });
+
+  it.each([
+    ["aws", "aws_reserved_instance", "AmazonEC2", "us-east-1"],
+    ["azure", "azure_savings_plan", "Microsoft.Compute", "eastus"],
+    ["azure", "azure_reservation", "Microsoft.Compute", "eastus2"],
+    ["gcp", "gcp_committed_use_discount", "Compute Engine", "us-central1"],
+  ] as const)(
+    "processes a %s %s queued run through instrument-specific worker dispatch",
+    async (provider, instrument, serviceCode, region) => {
+      harness = await createOptimizerRunsHarness(`ccpo_optimizer_worker_${instrument}`);
+      const fixture = await createQueuedRun(harness.objectStore, {
+        label: instrument,
+        provider,
+        instrument,
+        serviceCode,
+        region,
+        forecastCosts: ["600000", "620000", "590000"],
+        hourlyRateCents: "600",
+        maxDownsideLossCents: "250000",
+        minExpectedSavingsCents: "1000",
+      });
+
+      const result = await createOptimizerWorker(
+        createOptimizerRunsRepository(harness.pool),
+        harness.objectStore,
+      ).processNextOptimizerRun();
+
+      expect(result).toMatchObject({
+        processed: true,
+        runId: fixture.runId,
+        status: "completed",
+        recommendationCount: 1,
+      });
+
+      const recommendation = await harness.pool.query<{
+        provider: string;
+        instrument: string;
+        service_code: string;
+        region: string;
+        expected_savings_cents: string;
+      }>(
+        `SELECT provider, instrument, service_code, region, expected_savings_cents::text
+           FROM recommendations
+          WHERE optimizer_run_id = $1`,
+        [fixture.runId],
+      );
+      expect(recommendation.rows[0]).toEqual({
+        provider,
+        instrument,
+        service_code: serviceCode,
+        region,
+        expected_savings_cents: "162000",
+      });
+    },
+  );
 });
 
 async function createQueuedRun(
   objectStore: ObjectStore,
   options: Readonly<{
     label: string;
+    provider?: "aws" | "azure" | "gcp";
+    instrument?:
+      | "aws_compute_savings_plan"
+      | "aws_reserved_instance"
+      | "azure_savings_plan"
+      | "azure_reservation"
+      | "gcp_committed_use_discount";
+    serviceCode?: string;
+    region?: string;
     forecastCosts: readonly string[];
     hourlyRateCents: string;
     maxDownsideLossCents: string;
     minExpectedSavingsCents: string;
   }>,
 ): Promise<Readonly<{ runId: string; priceVersionId: string }>> {
+  const provider = options.provider ?? "aws";
+  const instrument = options.instrument ?? "aws_compute_savings_plan";
+  const serviceCode = options.serviceCode ?? "AmazonEC2";
+  const region = options.region ?? "us-east-1";
   const forecastRunId = await insertCompletedForecastRun(
     options.label,
     objectStore,
     options.forecastCosts,
+    provider,
+    serviceCode,
+    region,
   );
   const policyId = await insertActivePolicy(
     options.label,
+    instrument,
     options.maxDownsideLossCents,
     options.minExpectedSavingsCents,
   );
-  const priceVersionId = await insertActivePriceVersion(options.label, options.hourlyRateCents);
+  const priceVersionId = await insertActivePriceVersion(
+    options.label,
+    provider,
+    instrument,
+    serviceCode,
+    region,
+    options.hourlyRateCents,
+  );
   const response = await harness!.app.inject({
     method: "POST",
     url: "/api/optimizer-runs",
@@ -302,6 +381,8 @@ async function createQueuedRun(
     payload: {
       forecast_run_id: forecastRunId,
       optimizer_policy_id: policyId,
+      provider,
+      instrument,
       price_table_version_ids: [priceVersionId],
     },
   });
@@ -313,13 +394,16 @@ async function insertCompletedForecastRun(
   label: string,
   objectStore: ObjectStore,
   forecastCosts: readonly string[],
+  provider = "aws",
+  serviceCode = "AmazonEC2",
+  region = "us-east-1",
 ): Promise<string> {
   const model = await harness!.pool.query<{ id: string }>(
     `INSERT INTO forecast_models
        (tenant_id, name, provider_scope, service_scope, horizon_months, method, config, status)
-     VALUES ($1, $2, ARRAY['aws'], ARRAY['AmazonEC2'], 12, 'seasonal_naive', '{}', 'draft')
+     VALUES ($1, $2, ARRAY[$3]::text[], ARRAY[$4]::text[], 12, 'seasonal_naive', '{}', 'draft')
      RETURNING id`,
-    [harness!.tenantA, `${label}-model`],
+    [harness!.tenantA, `${label}-model`, provider, serviceCode],
   );
   await harness!.pool.query("UPDATE forecast_models SET status = 'active' WHERE id = $1", [
     model.rows[0]!.id,
@@ -345,9 +429,9 @@ async function insertCompletedForecastRun(
         quality_metrics: { confidence: "high", warnings: [] },
         forecast_points: forecastCosts.map((cost, index) => ({
           month: `2026-${String(index + 4).padStart(2, "0")}`,
-          provider: "aws",
-          service_code: "AmazonEC2",
-          region: "us-east-1",
+          provider,
+          service_code: serviceCode,
+          region,
           forecast_on_demand_cost_cents: cost,
           basis: "all_history_average",
         })),
@@ -369,6 +453,7 @@ async function insertCompletedForecastRun(
 
 async function insertActivePolicy(
   label: string,
+  instrument = "aws_compute_savings_plan",
   maxDownsideLossCents: string,
   minExpectedSavingsCents: string,
 ): Promise<string> {
@@ -377,10 +462,16 @@ async function insertActivePolicy(
        (tenant_id, name, objective, max_downside_loss_cents, min_expected_savings_cents,
         max_utilization_gap_pct, approval_threshold_cents, allowed_instruments, config)
      VALUES ($1, $2, 'maximize_expected_savings', $3::bigint, $4::bigint,
-             25.00, 50000, ARRAY['aws_compute_savings_plan']::text[],
+             25.00, 50000, ARRAY[$5]::text[],
              '{"liquidity_penalty_bps":0}'::jsonb)
      RETURNING id`,
-    [harness!.tenantA, `${label}-policy`, maxDownsideLossCents, minExpectedSavingsCents],
+    [
+      harness!.tenantA,
+      `${label}-policy`,
+      maxDownsideLossCents,
+      minExpectedSavingsCents,
+      instrument,
+    ],
   );
   await harness!.pool.query("UPDATE optimizer_policies SET status = 'active' WHERE id = $1", [
     policy.rows[0]!.id,
@@ -388,14 +479,23 @@ async function insertActivePolicy(
   return policy.rows[0]!.id;
 }
 
-async function insertActivePriceVersion(label: string, hourlyRateCents: string): Promise<string> {
+async function insertActivePriceVersion(
+  label: string,
+  provider = "aws",
+  instrument = "aws_compute_savings_plan",
+  serviceCode = "AmazonEC2",
+  region = "us-east-1",
+  hourlyRateCents: string,
+): Promise<string> {
   const version = await harness!.pool.query<{ id: string }>(
     `INSERT INTO price_table_versions
        (tenant_id, provider, instrument, version_label, effective_from, source_uri, status, checksum)
-     VALUES ($1, 'aws', 'aws_compute_savings_plan', $2, '2026-08-01', $3, 'draft', $4)
+     VALUES ($1, $2, $3, $4, '2026-08-01', $5, 'draft', $6)
      RETURNING id`,
     [
       harness!.tenantA,
+      provider,
+      instrument,
       `${label}-prices`,
       `prices/${label}.json`,
       `${label
@@ -408,10 +508,18 @@ async function insertActivePriceVersion(label: string, hourlyRateCents: string):
     `INSERT INTO price_table_items
        (tenant_id, price_table_version_id, provider, instrument, sku, region,
         term_months, payment_option, hourly_rate_cents, upfront_cents, coverage_rules)
-     VALUES ($1, $2, 'aws', 'aws_compute_savings_plan', $3, 'us-east-1',
-             12, 'no_upfront', $4::bigint, 0,
-             '{"service_code":"AmazonEC2","eligible":true}'::jsonb)`,
-    [harness!.tenantA, version.rows[0]!.id, `${label}-sku`, hourlyRateCents],
+     VALUES ($1, $2, $3, $4, $5, $6,
+             12, 'no_upfront', $7::bigint, 0, $8::jsonb)`,
+    [
+      harness!.tenantA,
+      version.rows[0]!.id,
+      provider,
+      instrument,
+      `${label}-sku`,
+      region,
+      hourlyRateCents,
+      JSON.stringify({ service_code: serviceCode, usage_family: "compute", eligible: true }),
+    ],
   );
   await harness!.pool.query("UPDATE price_table_versions SET status = 'active' WHERE id = $1", [
     version.rows[0]!.id,

@@ -23,15 +23,15 @@ export type OptimizerWorkerResult =
 
 interface ForecastPoint {
   month: string;
-  provider: "aws";
+  provider: OptimizerWorkerRun["provider"];
   service_code: string;
   region: string;
   forecast_on_demand_cost_cents: string;
 }
 
-export type AwsComputeSavingsPlanCandidate = Readonly<{
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+export type CommitmentInstrumentCandidate = Readonly<{
+  provider: OptimizerWorkerRun["provider"];
+  instrument: OptimizerWorkerRun["instrument"];
   service_code: string;
   region: string;
   term_months: number;
@@ -46,6 +46,17 @@ export type AwsComputeSavingsPlanCandidate = Readonly<{
   feasible: boolean;
   binding_constraints: readonly string[];
 }>;
+
+export type AwsComputeSavingsPlanCandidate = CommitmentInstrumentCandidate &
+  Readonly<{ provider: "aws"; instrument: "aws_compute_savings_plan" }>;
+export type AwsReservedInstanceCandidate = CommitmentInstrumentCandidate &
+  Readonly<{ provider: "aws"; instrument: "aws_reserved_instance" }>;
+export type AzureSavingsPlanCandidate = CommitmentInstrumentCandidate &
+  Readonly<{ provider: "azure"; instrument: "azure_savings_plan" }>;
+export type AzureReservationCandidate = CommitmentInstrumentCandidate &
+  Readonly<{ provider: "azure"; instrument: "azure_reservation" }>;
+export type GcpCommittedUseDiscountCandidate = CommitmentInstrumentCandidate &
+  Readonly<{ provider: "gcp"; instrument: "gcp_committed_use_discount" }>;
 
 const HOURS_PER_MONTH = 730n;
 
@@ -69,7 +80,7 @@ async function processNext(
     const forecastUri = forecastOutputUri(snapshot);
     const forecast = await readJson(objectStore, forecastUri);
     const priceItems = await repository.listFrozenPriceItems(run);
-    const candidates = optimizeAwsComputeSavingsPlan(run, snapshot, forecast, priceItems);
+    const candidates = optimizeCommitmentRun(run, snapshot, forecast, priceItems);
     const feasible = candidates.filter((candidate) => candidate.feasible);
     const selected = feasible[0] ?? null;
     const frontier = buildFrontier(run, candidates, selected);
@@ -119,6 +130,101 @@ export function optimizeAwsComputeSavingsPlan(
   forecast: Record<string, unknown>,
   priceItems: readonly OptimizerPriceItem[],
 ): AwsComputeSavingsPlanCandidate[] {
+  requireInstrument(run, "aws", "aws_compute_savings_plan");
+  return optimizeCommitmentInstrument(
+    run,
+    snapshot,
+    forecast,
+    priceItems,
+  ) as AwsComputeSavingsPlanCandidate[];
+}
+
+export function optimizeAwsReservedInstance(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): AwsReservedInstanceCandidate[] {
+  requireInstrument(run, "aws", "aws_reserved_instance");
+  return optimizeCommitmentInstrument(
+    run,
+    snapshot,
+    forecast,
+    priceItems,
+  ) as AwsReservedInstanceCandidate[];
+}
+
+export function optimizeAzureSavingsPlan(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): AzureSavingsPlanCandidate[] {
+  requireInstrument(run, "azure", "azure_savings_plan");
+  return optimizeCommitmentInstrument(
+    run,
+    snapshot,
+    forecast,
+    priceItems,
+  ) as AzureSavingsPlanCandidate[];
+}
+
+export function optimizeAzureReservation(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): AzureReservationCandidate[] {
+  requireInstrument(run, "azure", "azure_reservation");
+  return optimizeCommitmentInstrument(
+    run,
+    snapshot,
+    forecast,
+    priceItems,
+  ) as AzureReservationCandidate[];
+}
+
+export function optimizeGcpCommittedUseDiscount(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): GcpCommittedUseDiscountCandidate[] {
+  requireInstrument(run, "gcp", "gcp_committed_use_discount");
+  return optimizeCommitmentInstrument(
+    run,
+    snapshot,
+    forecast,
+    priceItems,
+  ) as GcpCommittedUseDiscountCandidate[];
+}
+
+function optimizeCommitmentRun(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): CommitmentInstrumentCandidate[] {
+  switch (run.instrument) {
+    case "aws_compute_savings_plan":
+      return optimizeAwsComputeSavingsPlan(run, snapshot, forecast, priceItems);
+    case "aws_reserved_instance":
+      return optimizeAwsReservedInstance(run, snapshot, forecast, priceItems);
+    case "azure_savings_plan":
+      return optimizeAzureSavingsPlan(run, snapshot, forecast, priceItems);
+    case "azure_reservation":
+      return optimizeAzureReservation(run, snapshot, forecast, priceItems);
+    case "gcp_committed_use_discount":
+      return optimizeGcpCommittedUseDiscount(run, snapshot, forecast, priceItems);
+  }
+}
+
+function optimizeCommitmentInstrument(
+  run: OptimizerWorkerRun,
+  snapshot: Record<string, unknown>,
+  forecast: Record<string, unknown>,
+  priceItems: readonly OptimizerPriceItem[],
+): CommitmentInstrumentCandidate[] {
   const points = forecastPoints(forecast).filter(
     (point) => point.provider === run.provider && point.region.length > 0,
   );
@@ -133,7 +239,7 @@ function evaluateItem(
   policy: PolicySnapshot,
   points: readonly ForecastPoint[],
   item: OptimizerPriceItem,
-): AwsComputeSavingsPlanCandidate[] {
+): CommitmentInstrumentCandidate[] {
   if (points.length === 0) return [];
   const eligibleCosts = points
     .map((point) => BigInt(point.forecast_on_demand_cost_cents))
@@ -195,7 +301,7 @@ function pointsForItem(
 function recommendationInput(
   run: OptimizerWorkerRun,
   snapshot: Record<string, unknown>,
-  selected: AwsComputeSavingsPlanCandidate,
+  selected: CommitmentInstrumentCandidate,
 ): OptimizerRecommendationInput {
   const policy = policySnapshot(snapshot);
   const approvalRequired =
@@ -227,7 +333,7 @@ function recommendationInput(
 
 function buildOutput(
   run: OptimizerWorkerRun,
-  selected: AwsComputeSavingsPlanCandidate,
+  selected: CommitmentInstrumentCandidate,
 ): Record<string, unknown> {
   return {
     schema_version: "optimizer-run-output:v1",
@@ -238,8 +344,8 @@ function buildOutput(
 
 function buildFrontier(
   run: OptimizerWorkerRun,
-  candidates: readonly AwsComputeSavingsPlanCandidate[],
-  selected: AwsComputeSavingsPlanCandidate | null,
+  candidates: readonly CommitmentInstrumentCandidate[],
+  selected: CommitmentInstrumentCandidate | null,
 ): Record<string, unknown> {
   const bestExpected = maxBigInt(
     candidates.map((candidate) => BigInt(candidate.expected_savings_cents)),
@@ -263,7 +369,7 @@ function buildFrontier(
 }
 
 function infeasibilityDetails(
-  candidates: readonly AwsComputeSavingsPlanCandidate[],
+  candidates: readonly CommitmentInstrumentCandidate[],
 ): Record<string, unknown> {
   const lowestDownside = minBigInt(
     candidates.map((candidate) => BigInt(candidate.p95_downside_loss_cents)),
@@ -309,7 +415,7 @@ function forecastPoints(forecast: Record<string, unknown>): ForecastPoint[] {
     const row = point && typeof point === "object" ? (point as Record<string, unknown>) : {};
     return {
       month: stringAt(row, "month"),
-      provider: "aws",
+      provider: providerValue(row, "provider"),
       service_code: stringAt(row, "service_code"),
       region: stringAt(row, "region"),
       forecast_on_demand_cost_cents: stringAt(row, "forecast_on_demand_cost_cents"),
@@ -349,8 +455,8 @@ function riskBand(
 }
 
 function compareCandidates(
-  left: AwsComputeSavingsPlanCandidate,
-  right: AwsComputeSavingsPlanCandidate,
+  left: CommitmentInstrumentCandidate,
+  right: CommitmentInstrumentCandidate,
 ): number {
   if (left.feasible !== right.feasible) return left.feasible ? -1 : 1;
   const expected = BigInt(right.expected_savings_cents) - BigInt(left.expected_savings_cents);
@@ -407,6 +513,25 @@ function objectAt(source: Record<string, unknown>, key: string): Record<string, 
 function stringAt(source: Record<string, unknown>, key: string): string {
   const value = source[key];
   return typeof value === "string" ? value : "0";
+}
+
+function providerValue(
+  source: Record<string, unknown>,
+  key: string,
+): OptimizerWorkerRun["provider"] {
+  const value = source[key];
+  if (value === "aws" || value === "azure" || value === "gcp") return value;
+  return "aws";
+}
+
+function requireInstrument(
+  run: OptimizerWorkerRun,
+  provider: OptimizerWorkerRun["provider"],
+  instrument: OptimizerWorkerRun["instrument"],
+): void {
+  if (run.provider !== provider || run.instrument !== instrument) {
+    throw new Error("optimizer instrument mismatch");
+  }
 }
 
 function integerAt(source: Record<string, unknown>, key: string, fallback: number): number {

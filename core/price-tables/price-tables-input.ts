@@ -16,10 +16,34 @@ const OBJECT_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,2047}$/u;
 const UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]{0,18})$/u;
 
 export function parsePriceTableCreateBody(body: unknown): PriceTableCreateInput {
-  return parseAwsComputeSavingsPlanPriceTable(body);
+  return parseCommitmentPriceTable(body);
 }
 
 export function parseAwsComputeSavingsPlanPriceTable(body: unknown): PriceTableCreateInput {
+  return parseCommitmentPriceTable(body, "aws", "aws_compute_savings_plan");
+}
+
+export function parseAwsReservedInstancePriceTable(body: unknown): PriceTableCreateInput {
+  return parseCommitmentPriceTable(body, "aws", "aws_reserved_instance");
+}
+
+export function parseAzureSavingsPlanPriceTable(body: unknown): PriceTableCreateInput {
+  return parseCommitmentPriceTable(body, "azure", "azure_savings_plan");
+}
+
+export function parseAzureReservationPriceTable(body: unknown): PriceTableCreateInput {
+  return parseCommitmentPriceTable(body, "azure", "azure_reservation");
+}
+
+export function parseGcpCommittedUseDiscountPriceTable(body: unknown): PriceTableCreateInput {
+  return parseCommitmentPriceTable(body, "gcp", "gcp_committed_use_discount");
+}
+
+function parseCommitmentPriceTable(
+  body: unknown,
+  expectedProvider?: PriceTableProvider,
+  expectedInstrument?: PriceTableInstrument,
+): PriceTableCreateInput {
   const object = closedRecord(body);
   rejectUnknown(
     object,
@@ -35,7 +59,9 @@ export function parseAwsComputeSavingsPlanPriceTable(body: unknown): PriceTableC
   );
   const provider = parseProvider(object.provider);
   const instrument = parseInstrument(object.instrument);
-  if (provider !== "aws" || instrument !== "aws_compute_savings_plan") throw invalid();
+  if (!isSupportedPair(provider, instrument)) throw invalid();
+  if (expectedProvider && provider !== expectedProvider) throw invalid();
+  if (expectedInstrument && instrument !== expectedInstrument) throw invalid();
   if (!Array.isArray(object.items) || object.items.length < 1 || object.items.length > 5000) {
     throw invalid();
   }
@@ -46,7 +72,7 @@ export function parseAwsComputeSavingsPlanPriceTable(body: unknown): PriceTableC
     effectiveFrom: dateValue(object.effective_from),
     effectiveTo: nullableDate(object.effective_to),
     sourceUri: objectKey(object.source_uri),
-    items: Object.freeze(object.items.map(priceItem)),
+    items: Object.freeze(object.items.map((item) => priceItem(item, provider, instrument))),
   } as const;
   if (input.effectiveTo && input.effectiveTo < input.effectiveFrom) throw invalid();
   return Object.freeze({ ...input, checksum: checksum(input) });
@@ -68,7 +94,7 @@ export function parsePriceTableListQuery(query: unknown): PriceTableListInput {
   });
 }
 
-function priceItem(value: unknown) {
+function priceItem(value: unknown, provider: PriceTableProvider, instrument: PriceTableInstrument) {
   const object = closedRecord(value);
   rejectUnknown(
     object,
@@ -85,9 +111,7 @@ function priceItem(value: unknown) {
   const termMonths = term(object.term_months);
   const paymentOption = payment(object.payment_option);
   const coverageRules = coverage(object.coverage_rules);
-  if (coverageRules.service_code !== "AmazonEC2" || coverageRules.usage_family !== "compute") {
-    throw invalid();
-  }
+  validateCoverageRules(provider, instrument, coverageRules);
   return Object.freeze({
     sku: cleanText(object.sku, 1, 512),
     region: cleanText(object.region, 1, 128),
@@ -100,12 +124,20 @@ function priceItem(value: unknown) {
 }
 
 function parseProvider(value: unknown): PriceTableProvider {
-  if (value !== "aws") throw invalid();
+  if (value !== "aws" && value !== "azure" && value !== "gcp") throw invalid();
   return value;
 }
 
 function parseInstrument(value: unknown): PriceTableInstrument {
-  if (value !== "aws_compute_savings_plan") throw invalid();
+  if (
+    value !== "aws_compute_savings_plan" &&
+    value !== "aws_reserved_instance" &&
+    value !== "azure_savings_plan" &&
+    value !== "azure_reservation" &&
+    value !== "gcp_committed_use_discount"
+  ) {
+    throw invalid();
+  }
   return value;
 }
 
@@ -128,7 +160,12 @@ function term(value: unknown): 12 | 36 {
 }
 
 function payment(value: unknown): PriceTablePaymentOption {
-  if (value !== "no_upfront" && value !== "partial_upfront" && value !== "all_upfront") {
+  if (
+    value !== "no_upfront" &&
+    value !== "partial_upfront" &&
+    value !== "all_upfront" &&
+    value !== "monthly"
+  ) {
     throw invalid();
   }
   return value;
@@ -240,4 +277,28 @@ function invalid(): AppError {
     statusCode: 400,
     details: [],
   });
+}
+
+function isSupportedPair(provider: PriceTableProvider, instrument: PriceTableInstrument): boolean {
+  return (
+    (provider === "aws" &&
+      (instrument === "aws_compute_savings_plan" || instrument === "aws_reserved_instance")) ||
+    (provider === "azure" &&
+      (instrument === "azure_savings_plan" || instrument === "azure_reservation")) ||
+    (provider === "gcp" && instrument === "gcp_committed_use_discount")
+  );
+}
+
+function validateCoverageRules(
+  provider: PriceTableProvider,
+  instrument: PriceTableInstrument,
+  coverageRules: Record<string, unknown>,
+): void {
+  const usageFamily = coverageRules.usage_family;
+  if (usageFamily !== "compute") throw invalid();
+  const serviceCode = coverageRules.service_code;
+  if (provider === "aws" && serviceCode === "AmazonEC2") return;
+  if (provider === "azure" && serviceCode === "Microsoft.Compute") return;
+  if (instrument === "gcp_committed_use_discount" && serviceCode === "Compute Engine") return;
+  throw invalid();
 }

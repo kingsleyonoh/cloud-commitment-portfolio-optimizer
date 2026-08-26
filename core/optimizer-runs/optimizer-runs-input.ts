@@ -28,7 +28,7 @@ export function parseOptimizerRunCreateBody(body: unknown): OptimizerRunCreateIn
     object.instrument === undefined
       ? "aws_compute_savings_plan"
       : instrumentValue(object.instrument);
-  if (provider !== "aws" || instrument !== "aws_compute_savings_plan") throw invalid();
+  if (!isSupportedPair(provider, instrument)) throw invalid();
   return Object.freeze({
     forecastRunId: uuidValue(object.forecast_run_id),
     ...(object.scenario_id === undefined ? {} : { scenarioId: uuidValue(object.scenario_id) }),
@@ -53,12 +53,20 @@ function uuidArray(value: unknown): readonly string[] {
 }
 
 function providerValue(value: unknown): OptimizerRunProvider {
-  if (value !== "aws") throw invalid();
+  if (value !== "aws" && value !== "azure" && value !== "gcp") throw invalid();
   return value;
 }
 
 function instrumentValue(value: unknown): OptimizerRunInstrument {
-  if (value !== "aws_compute_savings_plan") throw invalid();
+  if (
+    value !== "aws_compute_savings_plan" &&
+    value !== "aws_reserved_instance" &&
+    value !== "azure_savings_plan" &&
+    value !== "azure_reservation" &&
+    value !== "gcp_committed_use_discount"
+  ) {
+    throw invalid();
+  }
   return value;
 }
 
@@ -83,4 +91,17 @@ function invalid(): AppError {
     statusCode: 400,
     details: [],
   });
+}
+
+function isSupportedPair(
+  provider: OptimizerRunProvider,
+  instrument: OptimizerRunInstrument,
+): boolean {
+  return (
+    (provider === "aws" &&
+      (instrument === "aws_compute_savings_plan" || instrument === "aws_reserved_instance")) ||
+    (provider === "azure" &&
+      (instrument === "azure_savings_plan" || instrument === "azure_reservation")) ||
+    (provider === "gcp" && instrument === "gcp_committed_use_discount")
+  );
 }

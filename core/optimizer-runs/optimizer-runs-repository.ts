@@ -41,8 +41,8 @@ interface OptimizerRunRow extends QueryResultRow {
   forecastRunId: string;
   scenarioId: string | null;
   optimizerPolicyId: string;
-  provider: "aws";
-  instrument: "aws_compute_savings_plan";
+  provider: OptimizerRunRecord["provider"];
+  instrument: OptimizerRunRecord["instrument"];
   priceTableVersionIds: string[];
   status: OptimizerRunRecord["status"];
   randomSeed: string;

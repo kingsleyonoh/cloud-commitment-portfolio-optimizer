@@ -32,11 +32,26 @@ const priceTableItemSchema = {
     sku: { type: "string", minLength: 1, maxLength: 512 },
     region: { type: "string", minLength: 1, maxLength: 128 },
     term_months: { type: "integer", enum: [12, 36] },
-    payment_option: { type: "string", enum: ["no_upfront", "partial_upfront", "all_upfront"] },
+    payment_option: {
+      type: "string",
+      enum: ["no_upfront", "partial_upfront", "all_upfront", "monthly"],
+    },
     hourly_rate_cents: { type: "string", pattern: "^(?:0|[1-9][0-9]{0,18})$" },
     upfront_cents: { type: "string", pattern: "^(?:0|[1-9][0-9]{0,18})$" },
     coverage_rules: { type: "object", additionalProperties: true },
   },
+} as const;
+
+const providerSchema = { type: "string", enum: ["aws", "azure", "gcp"] } as const;
+const instrumentSchema = {
+  type: "string",
+  enum: [
+    "aws_compute_savings_plan",
+    "aws_reserved_instance",
+    "azure_savings_plan",
+    "azure_reservation",
+    "gcp_committed_use_discount",
+  ],
 } as const;
 
 export const priceTableCreateBodySchema = {
@@ -52,8 +67,8 @@ export const priceTableCreateBodySchema = {
     "items",
   ],
   properties: {
-    provider: { type: "string", const: "aws" },
-    instrument: { type: "string", const: "aws_compute_savings_plan" },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     version_label: { type: "string", minLength: 1, maxLength: 128 },
     effective_from: { type: "string", pattern: "^[0-9]{4}-(?:0[1-9]|1[0-2])-[0-3][0-9]$" },
     effective_to: {
@@ -73,8 +88,8 @@ export const priceTablesListQuerySchema = {
   properties: {
     limit: { type: "string", pattern: "^(?:[1-9]|[1-9][0-9]|100)$" },
     cursor: { type: "string", minLength: 1, maxLength: 512 },
-    provider: { type: "string", const: "aws" },
-    instrument: { type: "string", const: "aws_compute_savings_plan" },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     status: { type: "string", enum: ["draft", "active", "superseded", "blocked"] },
   },
 } as const;
@@ -98,8 +113,8 @@ export const priceTableSchema = {
   ],
   properties: {
     id: { type: "string", format: "uuid" },
-    provider: { type: "string", const: "aws" },
-    instrument: { type: "string", const: "aws_compute_savings_plan" },
+    provider: providerSchema,
+    instrument: instrumentSchema,
     version_label: { type: "string" },
     effective_from: { type: "string" },
     effective_to: { anyOf: [{ type: "string" }, { type: "null" }] },
