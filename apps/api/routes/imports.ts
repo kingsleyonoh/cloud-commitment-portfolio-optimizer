@@ -18,6 +18,7 @@ import {
   importsListResponseSchema,
   importsResponseSchemas,
 } from "./imports-schema.js";
+import { renderImportsPage } from "../../web/imports-page.js";
 
 export interface ImportsRuntime {
   limiter: ProtectedUsersLimiter;
@@ -25,9 +26,27 @@ export interface ImportsRuntime {
 }
 
 export function registerImportsRoutes(app: FastifyInstance, runtime: ImportsRuntime): void {
+  registerImportsPage(app, runtime);
   registerListRoute(app, runtime);
   registerCreateRoute(app, runtime);
   registerGetRoute(app, runtime);
+}
+
+function registerImportsPage(app: FastifyInstance, runtime: ImportsRuntime): void {
+  app.get(
+    "/imports",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/imports", "imports.read"),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderImportsPage({ imports: page.imports, role: context.role }));
+    },
+  );
 }
 
 function registerListRoute(app: FastifyInstance, runtime: ImportsRuntime): void {
