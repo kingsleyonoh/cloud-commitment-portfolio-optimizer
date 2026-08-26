@@ -2,6 +2,8 @@ import type { AppConfig } from "../../core/config/env.js";
 import { getEnvironmentConfig } from "../../core/config/env.js";
 import { createForecastRepository } from "../../core/forecasting/forecast-repository.js";
 import { createForecastWorker } from "../../core/forecasting/forecast-worker.js";
+import { createOptimizerRunsRepository } from "../../core/optimizer-runs/optimizer-runs-repository.js";
+import { createOptimizerWorker } from "../../core/optimizer-runs/optimizer-worker.js";
 import { getDbPool, type DbPoolResource } from "../../core/shared/db.js";
 import { getJobQueue, type JobQueue } from "../../core/shared/jobQueue.js";
 import type { Logger } from "../../core/shared/logger.js";
@@ -52,6 +54,7 @@ export async function bootstrapWorker(
       forecasts: createForecastWorker(createForecastRepository(database.pool), objectStore, {
         minHistoryDays: config.forecasting.minHistoryDays,
       }),
+      optimizers: createOptimizerWorker(createOptimizerRunsRepository(database.pool), objectStore),
     });
     close = (options.createCloser ?? createWorkerRuntimeCloser)(worker, initialized);
     await worker.start();

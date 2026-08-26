@@ -32,6 +32,37 @@ export type OptimizerRunRecord = Readonly<{
   updatedAt: string;
 }>;
 
+export type OptimizerWorkerRun = OptimizerRunRecord & Readonly<{ tenantId: string }>;
+
+export type OptimizerPriceItem = Readonly<{
+  sku: string;
+  region: string;
+  termMonths: number;
+  paymentOption: "no_upfront" | "partial_upfront" | "all_upfront" | "monthly";
+  hourlyRateCents: string;
+  upfrontCents: string;
+  coverageRules: Record<string, unknown>;
+}>;
+
+export type OptimizerRecommendationInput = Readonly<{
+  recommendationType: "buy" | "manual_review" | "no_action";
+  provider: OptimizerRunProvider;
+  instrument: OptimizerRunInstrument;
+  serviceCode: string;
+  region: string;
+  termMonths: number;
+  commitmentAmountCents: string;
+  expectedSavingsCents: string;
+  p95DownsideLossCents: string;
+  utilizationP50Pct: string;
+  utilizationP95Pct: string;
+  confidenceScore: string;
+  riskBand: "low" | "medium" | "high" | "blocked";
+  status: "draft" | "ready" | "pending_approval";
+  explanation: Record<string, unknown>;
+  approvalRequired: boolean;
+}>;
+
 export type OptimizerRun = Readonly<{
   id: string;
   forecast_run_id: string;

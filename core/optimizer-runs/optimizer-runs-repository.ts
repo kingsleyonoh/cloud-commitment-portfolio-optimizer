@@ -5,10 +5,13 @@ import type {
   OptimizerRunCreateInput,
   OptimizerRunForecastSnapshot,
   OptimizerRunPolicySnapshot,
+  OptimizerPriceItem,
+  OptimizerRecommendationInput,
   OptimizerRunPriceSnapshot,
   OptimizerRunRecord,
   OptimizerRunScenarioSnapshot,
   OptimizerRunSnapshotInput,
+  OptimizerWorkerRun,
   ResolvedOptimizerRunInputs,
 } from "./optimizer-runs-types.js";
 
@@ -19,6 +22,16 @@ export interface OptimizerRunsRepository {
   ): Promise<ResolvedOptimizerRunInputs | null>;
   create(tenantId: string, input: OptimizerRunSnapshotInput): Promise<OptimizerRunRecord>;
   get(tenantId: string, id: string): Promise<OptimizerRunRecord | null>;
+  claimNextQueuedOptimizerRun(): Promise<OptimizerWorkerRun | null>;
+  listFrozenPriceItems(run: OptimizerWorkerRun): Promise<OptimizerPriceItem[]>;
+  insertRecommendation(run: OptimizerWorkerRun, input: OptimizerRecommendationInput): Promise<void>;
+  completeOptimizerRun(runId: string, outputUri: string, frontierUri: string): Promise<void>;
+  markOptimizerRunInfeasible(
+    runId: string,
+    frontierUri: string,
+    details: Record<string, unknown>,
+  ): Promise<void>;
+  failOptimizerRun(runId: string, code: string): Promise<void>;
 }
 
 interface OptimizerRunRow extends QueryResultRow {
@@ -55,6 +68,14 @@ export function createOptimizerRunsRepository(pool: Pool): OptimizerRunsReposito
     resolveInputs: (tenantId, input) => resolveInputs(pool, tenantId, input),
     create: (tenantId, input) => create(pool, tenantId, input),
     get: (tenantId, id) => get(pool, tenantId, id),
+    claimNextQueuedOptimizerRun: () => claimNextQueuedOptimizerRun(pool),
+    listFrozenPriceItems: (run) => listFrozenPriceItems(pool, run),
+    insertRecommendation: (run, input) => insertRecommendation(pool, run, input),
+    completeOptimizerRun: (runId, outputUri, frontierUri) =>
+      completeOptimizerRun(pool, runId, outputUri, frontierUri),
+    markOptimizerRunInfeasible: (runId, frontierUri, details) =>
+      markOptimizerRunInfeasible(pool, runId, frontierUri, details),
+    failOptimizerRun: (runId, code) => failOptimizerRun(pool, runId, code),
   };
 }
 
@@ -246,6 +267,166 @@ async function get(pool: Pool, tenantId: string, id: string): Promise<OptimizerR
     [tenantId, id],
   );
   return result.rows[0] ? freezeRun(result.rows[0]) : null;
+}
+
+async function claimNextQueuedOptimizerRun(pool: Pool): Promise<OptimizerWorkerRun | null> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const candidate = await client.query<{ id: string }>(
+      `SELECT id
+         FROM optimizer_runs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1`,
+    );
+    const id = candidate.rows[0]?.id;
+    if (!id) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const updated = await client.query<OptimizerRunRow & { tenantId: string }>(
+      `UPDATE optimizer_runs
+          SET status = 'running'
+        WHERE id = $1 AND status = 'queued'
+        RETURNING tenant_id AS "tenantId", ${RUN_PROJECTION}`,
+      [id],
+    );
+    await client.query("COMMIT");
+    const row = updated.rows[0];
+    return row ? Object.freeze({ ...freezeRun(row), tenantId: row.tenantId }) : null;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function listFrozenPriceItems(
+  pool: Pool,
+  run: OptimizerWorkerRun,
+): Promise<OptimizerPriceItem[]> {
+  const result = await pool.query<
+    QueryResultRow & {
+      sku: string;
+      region: string;
+      termMonths: number;
+      paymentOption: OptimizerPriceItem["paymentOption"];
+      hourlyRateCents: string;
+      upfrontCents: string;
+      coverageRules: Record<string, unknown>;
+    }
+  >(
+    `SELECT sku, region, term_months AS "termMonths", payment_option AS "paymentOption",
+            hourly_rate_cents::text AS "hourlyRateCents", upfront_cents::text AS "upfrontCents",
+            coverage_rules AS "coverageRules"
+       FROM price_table_items
+      WHERE tenant_id = $1
+        AND price_table_version_id = ANY($2::uuid[])
+        AND provider = $3
+        AND instrument = $4
+      ORDER BY region ASC, sku ASC, term_months ASC, payment_option ASC`,
+    [run.tenantId, run.priceTableVersionIds, run.provider, run.instrument],
+  );
+  return result.rows.map((row) =>
+    Object.freeze({
+      sku: row.sku,
+      region: row.region,
+      termMonths: row.termMonths,
+      paymentOption: row.paymentOption,
+      hourlyRateCents: row.hourlyRateCents,
+      upfrontCents: row.upfrontCents,
+      coverageRules: Object.freeze({ ...row.coverageRules }),
+    }),
+  );
+}
+
+async function insertRecommendation(
+  pool: Pool,
+  run: OptimizerWorkerRun,
+  input: OptimizerRecommendationInput,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO recommendations
+       (tenant_id, optimizer_run_id, recommendation_type, provider, instrument, service_code,
+        region, term_months, commitment_amount_cents, expected_savings_cents,
+        p95_downside_loss_cents, utilization_p50_pct, utilization_p95_pct, confidence_score,
+        risk_band, status, explanation, approval_required)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+             $9::bigint, $10::bigint, $11::bigint, $12::numeric, $13::numeric,
+             $14::numeric, $15, $16, $17::jsonb, $18)`,
+    [
+      run.tenantId,
+      run.id,
+      input.recommendationType,
+      input.provider,
+      input.instrument,
+      input.serviceCode,
+      input.region,
+      input.termMonths,
+      input.commitmentAmountCents,
+      input.expectedSavingsCents,
+      input.p95DownsideLossCents,
+      input.utilizationP50Pct,
+      input.utilizationP95Pct,
+      input.confidenceScore,
+      input.riskBand,
+      input.status,
+      JSON.stringify(input.explanation),
+      input.approvalRequired,
+    ],
+  );
+}
+
+async function completeOptimizerRun(
+  pool: Pool,
+  runId: string,
+  outputUri: string,
+  frontierUri: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE optimizer_runs
+        SET status = 'completed',
+            output_uri = $2,
+            frontier_uri = $3,
+            infeasibility_details = '{}'::jsonb,
+            error_details = '{}'::jsonb
+      WHERE id = $1 AND status = 'running'`,
+    [runId, outputUri, frontierUri],
+  );
+}
+
+async function markOptimizerRunInfeasible(
+  pool: Pool,
+  runId: string,
+  frontierUri: string,
+  details: Record<string, unknown>,
+): Promise<void> {
+  await pool.query(
+    `UPDATE optimizer_runs
+        SET status = 'infeasible',
+            output_uri = NULL,
+            frontier_uri = $2,
+            infeasibility_details = $3::jsonb,
+            error_details = '{}'::jsonb
+      WHERE id = $1 AND status = 'running'`,
+    [runId, frontierUri, JSON.stringify(details)],
+  );
+}
+
+async function failOptimizerRun(pool: Pool, runId: string, code: string): Promise<void> {
+  await pool.query(
+    `UPDATE optimizer_runs
+        SET status = 'failed',
+            output_uri = NULL,
+            frontier_uri = NULL,
+            infeasibility_details = '{}'::jsonb,
+            error_details = $2::jsonb
+      WHERE id = $1 AND status = 'running'`,
+    [runId, JSON.stringify({ code })],
+  );
 }
 
 function freezeRun(row: OptimizerRunRow): OptimizerRunRecord {

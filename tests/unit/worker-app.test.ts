@@ -50,6 +50,9 @@ it("starts with an injected ready queue without enqueueing or polling", async ()
     forecast_processed: false,
     forecast_run_id: null,
     forecast_status: null,
+    optimizer_processed: false,
+    optimizer_run_id: null,
+    optimizer_status: null,
   });
 });
 
@@ -74,5 +77,36 @@ it("processes one forecast run when an injected forecast worker is available", a
     forecast_processed: true,
     forecast_run_id: "forecast-run-1",
     forecast_status: "completed",
+    optimizer_processed: false,
+    optimizer_run_id: null,
+    optimizer_status: null,
+  });
+});
+
+it("processes one optimizer run when an injected optimizer worker is available", async () => {
+  const jobQueue = queue(true);
+  const workerLogger = logger();
+  const optimizers = {
+    processNextOptimizerRun: vi.fn(async () => ({
+      processed: true as const,
+      runId: "optimizer-run-1",
+      status: "completed" as const,
+      outputUri: "optimizer-runs/optimizer-run-1/output.json",
+      frontierUri: "optimizer-runs/optimizer-run-1/frontier.json",
+      recommendationCount: 1,
+    })),
+  };
+  const worker = buildWorker({ queue: jobQueue, logger: workerLogger, optimizers });
+
+  await worker.start();
+
+  expect(optimizers.processNextOptimizerRun).toHaveBeenCalledTimes(1);
+  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    forecast_processed: false,
+    forecast_run_id: null,
+    forecast_status: null,
+    optimizer_processed: true,
+    optimizer_run_id: "optimizer-run-1",
+    optimizer_status: "completed",
   });
 });

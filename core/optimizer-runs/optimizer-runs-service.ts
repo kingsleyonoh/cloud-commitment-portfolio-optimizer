@@ -28,7 +28,7 @@ export function createOptimizerRunsService(
   return {
     create: (context, body) =>
       createRun(repository, objectStore, options.defaultSeed, context, body),
-    get: (context, id) => getRun(repository, context, id),
+    get: (context, id) => getRun(repository, objectStore, context, id),
   };
 }
 
@@ -73,13 +73,33 @@ async function createRun(
 
 async function getRun(
   repository: OptimizerRunsRepository,
+  objectStore: ObjectStore,
   context: RequestContext,
   idValue: unknown,
 ): Promise<OptimizerRunDetail> {
   const id = parseOptimizerRunId(idValue);
   const row = await safe(() => repository.get(context.tenantId, id));
   if (!row) throw notFound();
-  return { optimizer_run: toRun(row), frontier_summary: null };
+  return {
+    optimizer_run: toRun(row),
+    frontier_summary: row.frontierUri
+      ? await readFrontierSummary(objectStore, row.frontierUri)
+      : null,
+  };
+}
+
+async function readFrontierSummary(
+  objectStore: ObjectStore,
+  frontierUri: string,
+): Promise<Record<string, unknown> | null> {
+  const parsed = await safe(async () =>
+    JSON.parse((await objectStore.get(frontierUri)).toString("utf8")),
+  );
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const summary = (parsed as Record<string, unknown>).summary;
+  return summary && typeof summary === "object" && !Array.isArray(summary)
+    ? (summary as Record<string, unknown>)
+    : null;
 }
 
 async function writeSnapshot(
