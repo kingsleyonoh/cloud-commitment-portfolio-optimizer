@@ -1,5 +1,7 @@
 import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../../core/config/env.js";
+import { createDashboardRepository } from "../../core/dashboard/dashboard-repository.js";
+import { createDashboardService } from "../../core/dashboard/dashboard-service.js";
 import { createImportsRepository } from "../../core/imports/imports-repository.js";
 import { createImportsService } from "../../core/imports/imports-service.js";
 import { createForecastRepository } from "../../core/forecasting/forecast-repository.js";
@@ -204,6 +206,9 @@ function applicationOptions(
     cloudAccounts: {
       limiter: usersLimiter,
       service: createCloudAccountsService(createCloudAccountsRepository(database.pool), logger),
+    },
+    dashboard: {
+      service: createDashboardService(createDashboardRepository(database.pool)),
     },
     imports: {
       limiter: usersLimiter,

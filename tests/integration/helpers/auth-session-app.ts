@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { Pool } from "pg";
 
 import { buildApp } from "../../../apps/api/app.js";
+import { createDashboardRepository } from "../../../core/dashboard/dashboard-repository.js";
+import { createDashboardService } from "../../../core/dashboard/dashboard-service.js";
 import { runMigrations } from "../../../core/db/migrations.js";
 import type { Logger } from "../../../core/shared/logger.js";
 import { createArgonExecutor } from "../../../core/tenant/argon-executor.js";
@@ -89,6 +91,9 @@ export async function createAuthSessionHarness(prefix: string): Promise<AuthSess
       const boundary = [instance.authenticate, instance.requireAction("tenant_profile.read")];
       instance.get("/api/session-probe", { preHandler: boundary }, async () => ({ ok: true }));
       instance.post("/api/session-probe", { preHandler: boundary }, async () => ({ ok: true }));
+    },
+    dashboard: {
+      service: createDashboardService(createDashboardRepository(pool)),
     },
   });
   return { database, pool, app, tenantId, otherTenantId, userId, adminId, password, origin, logs };
