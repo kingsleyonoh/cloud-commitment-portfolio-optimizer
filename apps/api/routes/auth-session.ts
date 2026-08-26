@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { AppError } from "../../../core/shared/errors.js";
+import { renderLoginPage } from "../../web/login-page.js";
 import { authError } from "../../../core/tenant/auth-errors.js";
 import { resolveAuthClientIp } from "../../../core/tenant/auth-client-ip.js";
 import {
@@ -36,9 +37,55 @@ export function registerAuthSessionRoutes(
   app: FastifyInstance,
   runtime: AuthSessionRouteRuntime,
 ): void {
+  registerFormParser(app);
+  registerLoginPage(app, runtime);
   registerLogin(app, runtime);
   registerRefresh(app, runtime);
   registerLogout(app, runtime);
+}
+
+function registerFormParser(app: FastifyInstance): void {
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string", bodyLimit: 4096 },
+    (_request, body, done) => done(null, parseFormBody(body)),
+  );
+}
+
+function registerLoginPage(app: FastifyInstance, runtime: AuthSessionRouteRuntime): void {
+  app.get("/login", async (_request, reply) =>
+    reply.code(200).type("text/html; charset=utf-8").send(renderLoginPage()),
+  );
+  app.post<{ Body: unknown }>("/login", { bodyLimit: 4096 }, async (request, reply) => {
+    rejectCredentialHeaders(request);
+    assertFormMedia(request.headers["content-type"]);
+    assertSameOrigin(request.headers, runtime.cookiePolicy.publicOrigin);
+    const body = parseLoginInput(request.body);
+    try {
+      const issue = await withRateHeader(reply, () =>
+        runtime.service.login({
+          ...body,
+          clientIp: clientIp(request, runtime.trustedProxyCidrs),
+          requestId: request.id,
+        }),
+      );
+      setSessionCookies(reply, runtime.cookiePolicy, issue);
+      return reply.code(303).header("location", "/dashboard").send("");
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode < 500) {
+        return reply
+          .code(error.statusCode)
+          .type("text/html; charset=utf-8")
+          .send(
+            renderLoginPage({
+              error,
+              values: { tenantId: body.tenantId, email: body.email },
+            }),
+          );
+      }
+      throw error;
+    }
+  });
 }
 
 function registerLogin(app: FastifyInstance, runtime: AuthSessionRouteRuntime): void {
@@ -150,6 +197,26 @@ function assertLoginMedia(contentType: string | undefined): void {
   if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(contentType ?? "")) {
     throw validationError();
   }
+}
+
+function assertFormMedia(contentType: string | undefined): void {
+  if (!/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(contentType ?? "")) {
+    throw validationError();
+  }
+}
+
+function parseFormBody(body: string | Buffer): Record<string, unknown> {
+  const raw = Buffer.isBuffer(body) ? body.toString("utf8") : body;
+  const parsed = new URLSearchParams(raw);
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of parsed) {
+    if (Object.hasOwn(result, key)) {
+      result[key] = [result[key], value];
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function assertNoBody(body: unknown): void {

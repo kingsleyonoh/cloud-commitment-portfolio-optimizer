@@ -106,6 +106,77 @@ it("commits one stable family, root token, safe audit, exact metadata, and exact
   expect(state.rows[0]).toEqual({ families: 1, tokens: 1, audits: 1, safe: true });
 });
 
+it("renders a script-free login page with JWT and API-key boundary copy", async () => {
+  harness = await createAuthSessionHarness("ccpo_session_login_page");
+  const response = await harness.app.inject({
+    method: "GET",
+    url: "/login",
+    headers: { accept: "text/html" },
+  });
+
+  expect(response.statusCode).toBe(200);
+  expect(response.headers["content-type"]).toContain("text/html");
+  expect(response.body).toContain("<form");
+  expect(response.body).toContain('action="/login"');
+  expect(response.body).toContain('name="tenant_id"');
+  expect(response.body).toContain('name="email"');
+  expect(response.body).toContain('name="password"');
+  expect(response.body).toContain("JWT session");
+  expect(response.body).toContain("API keys are for analyst automation");
+  expect(response.body).not.toMatch(/<script|apiKey|key_hash|token|csrf|passwordHash/iu);
+});
+
+it("issues session cookies from the HTML login form without exposing tokens", async () => {
+  harness = await createAuthSessionHarness("ccpo_session_login_form");
+  const response = await harness.app.inject({
+    method: "POST",
+    url: "/login",
+    headers: {
+      origin: harness.origin,
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    payload: new URLSearchParams({
+      tenant_id: harness.tenantId,
+      email: "session-user@example.invalid",
+      password: harness.password,
+    }).toString(),
+  });
+  const cookies = responseCookies(response);
+
+  expect(response.statusCode).toBe(303);
+  expect(response.headers.location).toBe("/dashboard");
+  expect(Object.keys(cookies).sort()).toEqual(["ccpo_access", "ccpo_csrf", "ccpo_refresh"]);
+  expect(response.body).not.toMatch(/(?:token|csrf|password|cookie|digest|email)/iu);
+});
+
+it("renders invalid HTML login attempts as a safe focused error summary", async () => {
+  harness = await createAuthSessionHarness("ccpo_session_login_form_invalid");
+  const response = await harness.app.inject({
+    method: "POST",
+    url: "/login",
+    headers: {
+      origin: harness.origin,
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    payload: new URLSearchParams({
+      tenant_id: harness.tenantId,
+      email: "session-user@example.invalid",
+      password: generatedPassword(14),
+    }).toString(),
+  });
+
+  expect(response.statusCode).toBe(401);
+  expect(response.headers["content-type"]).toContain("text/html");
+  expect(response.body).toContain('role="alert"');
+  expect(response.body).toContain("Authentication credentials are invalid.");
+  expect(response.body).toContain(`value="${harness.tenantId}"`);
+  expect(response.body).toContain('value="session-user@example.invalid"');
+  expect(response.body).not.toContain(generatedPassword(14));
+  expect(response.body).not.toMatch(/(?:ccpo_access|ccpo_refresh|digest|stack|postgres)/iu);
+});
+
 it("keeps unknown, unprovisioned, and wrong password failures identical without durable audit", async () => {
   harness = await createAuthSessionHarness("ccpo_session_login_invalid");
   await harness.pool.query(
