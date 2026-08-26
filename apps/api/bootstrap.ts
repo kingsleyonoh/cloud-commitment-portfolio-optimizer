@@ -2,6 +2,8 @@ import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../../core/config/env.js";
 import { createApprovalsRepository } from "../../core/approvals/approvals-repository.js";
 import { createApprovalsService } from "../../core/approvals/approvals-service.js";
+import { createBacktestsRepository } from "../../core/backtests/backtests-repository.js";
+import { createBacktestsService } from "../../core/backtests/backtests-service.js";
 import { createDashboardRepository } from "../../core/dashboard/dashboard-repository.js";
 import { createDashboardService } from "../../core/dashboard/dashboard-service.js";
 import { createImportsRepository } from "../../core/imports/imports-repository.js";
@@ -248,6 +250,13 @@ function applicationOptions(
       limiter: usersLimiter,
       service: createApprovalsService(createApprovalsRepository(database.pool), {
         expiryHours: config.approvals?.expiryHours ?? 168,
+      }),
+    },
+    backtests: {
+      limiter: usersLimiter,
+      service: createBacktestsService(createBacktestsRepository(database.pool), objectStore, {
+        maxMonths: config.backtest?.maxMonths ?? 24,
+        defaultSeed: BigInt(config.backtest?.randomSeed ?? 20_260_616),
       }),
     },
     reports: {

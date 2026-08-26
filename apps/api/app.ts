@@ -13,6 +13,7 @@ import {
   type ApiKeyRotationRuntime,
 } from "./routes/api-key-rotation.js";
 import { registerApprovalsRoutes, type ApprovalsRuntime } from "./routes/approvals.js";
+import { registerBacktestsRoutes, type BacktestsRuntime } from "./routes/backtests.js";
 import { registerCloudAccountsRoutes, type CloudAccountsRuntime } from "./routes/cloud-accounts.js";
 import { registerDashboardRoute, type DashboardRuntime } from "./routes/dashboard.js";
 import { registerForecastRoutes, type ForecastsRuntime } from "./routes/forecasts.js";
@@ -58,6 +59,7 @@ export interface BuildAppOptions {
   optimizerRuns?: OptimizerRunsRuntime;
   recommendations?: RecommendationsRuntime;
   approvals?: ApprovalsRuntime;
+  backtests?: BacktestsRuntime;
   reports?: ReportsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
@@ -122,6 +124,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
           registerRecommendationsRoutes(instance, options.recommendations);
         }
         if (options.approvals) registerApprovalsRoutes(instance, options.approvals);
+        if (options.backtests) registerBacktestsRoutes(instance, options.backtests);
         if (options.reports) registerReportsRoutes(instance, options.reports);
         if (options.tenantProfile && options.users && options.apiKeys) {
           registerSettingsRoute(instance, {

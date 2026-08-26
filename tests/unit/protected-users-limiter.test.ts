@@ -104,4 +104,23 @@ describe("protected users rolling limiter", () => {
       retryAfterSeconds: 60,
     });
   });
+
+  it("uses the PRD backtest route limits for replay creation and reads", async () => {
+    const limiter = createLocalProtectedUsersLimiter({ clock: () => 1_000 });
+    for (let count = 0; count < 10; count += 1) {
+      expect((await limiter.admit(context(), "POST", "/api/backtests")).allowed).toBe(true);
+    }
+    await expect(limiter.admit(context(), "POST", "/api/backtests")).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+
+    for (let count = 0; count < 120; count += 1) {
+      expect((await limiter.admit(context(), "GET", "/api/backtests/{id}")).allowed).toBe(true);
+    }
+    await expect(limiter.admit(context(), "GET", "/api/backtests/{id}")).resolves.toEqual({
+      allowed: false,
+      retryAfterSeconds: 60,
+    });
+  });
 });

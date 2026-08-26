@@ -34,6 +34,7 @@ const P1_ANALYST = new Set<AuthAction>([
   "recommendations.read",
   "recommendations.request_approval",
   "reports.read",
+  "backtests.read_run",
 ]);
 const P1_ADMIN = new Set<AuthAction>([
   ...P1_ANALYST,
@@ -57,8 +58,9 @@ const expectedByRole: Record<UserRole, ReadonlySet<AuthAction>> = {
     "recommendations.read",
     "recommendations.approve_reject",
     "approvals.read",
+    "backtests.read_run",
   ]),
-  read_only_auditor: new Set(),
+  read_only_auditor: new Set(["backtests.read_run"]),
 };
 
 let database: IsolatedDatabase | undefined;

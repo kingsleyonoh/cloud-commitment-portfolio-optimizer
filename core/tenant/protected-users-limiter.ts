@@ -32,6 +32,8 @@ export const RECOMMENDATIONS_LIST_LIMIT = 120;
 export const APPROVALS_LIST_LIMIT = 120;
 export const APPROVALS_MUTATION_LIMIT = 30;
 export const REPORTS_LIST_LIMIT = 120;
+export const BACKTESTS_LIST_LIMIT = 120;
+export const BACKTESTS_MUTATION_LIMIT = 10;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -61,6 +63,8 @@ export type ProtectedUsersRoute =
   | "/api/approvals/{id}"
   | "/api/approvals/{id}/approve"
   | "/api/approvals/{id}/reject"
+  | "/api/backtests"
+  | "/api/backtests/{id}"
   | "/api/reports/{source_type}/{source_id}";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
@@ -185,6 +189,9 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   }
   if (route.startsWith("/api/approvals")) {
     return method === "GET" ? APPROVALS_LIST_LIMIT : APPROVALS_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/backtests")) {
+    return method === "GET" ? BACKTESTS_LIST_LIMIT : BACKTESTS_MUTATION_LIMIT;
   }
   if (route.startsWith("/api/recommendations")) return RECOMMENDATIONS_LIST_LIMIT;
   if (route.startsWith("/api/reports")) return REPORTS_LIST_LIMIT;

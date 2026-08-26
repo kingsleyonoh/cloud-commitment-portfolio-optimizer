@@ -94,19 +94,27 @@ function expectedRoleDecision(role: UserRole, action: AuthAction): PolicyDecisio
     role === "tenant_admin" &&
     (action === "recommendations.request_approval" ||
       action === "recommendations.approve_reject" ||
-      action === "approvals.read")
+      action === "approvals.read" ||
+      action === "backtests.read_run")
   ) {
     return "allow_p1";
   }
-  if (role === "finops_analyst" && action === "recommendations.request_approval") {
+  if (
+    role === "finops_analyst" &&
+    (action === "recommendations.request_approval" || action === "backtests.read_run")
+  ) {
     return "allow_p1";
   }
   if (
     role === "finance_approver" &&
     (action === "recommendations.read" ||
       action === "recommendations.approve_reject" ||
-      action === "approvals.read")
+      action === "approvals.read" ||
+      action === "backtests.read_run")
   ) {
+    return "allow_p1";
+  }
+  if (role === "read_only_auditor" && action === "backtests.read_run") {
     return "allow_p1";
   }
   const canonical = action === "api_keys.read_manage" ? "api_keys.read_rotate" : action;
@@ -151,6 +159,7 @@ it("uses a fixed API-key P1 automation allow-list without inherited analyst gran
     "recommendations.read",
     "recommendations.request_approval",
     "reports.read",
+    "backtests.read_run",
   ];
   expect(Object.keys(API_KEY_ACTION_POLICY).sort()).toEqual([...AUTH_ACTIONS].sort());
   expect(AUTH_ACTIONS.filter((action) => API_KEY_ACTION_POLICY[action] === "allow_p1")).toEqual(
@@ -163,6 +172,7 @@ it("uses a fixed API-key P1 automation allow-list without inherited analyst gran
   }
   expect(API_KEY_ACTION_POLICY["optimizer_policies.read"]).toBe("deny");
   expect(API_KEY_ACTION_POLICY["recommendations.request_approval"]).toBe("allow_p1");
+  expect(API_KEY_ACTION_POLICY["backtests.read_run"]).toBe("allow_p1");
 });
 
 it("maps every protected PRD endpoint once to a canonical action", () => {
