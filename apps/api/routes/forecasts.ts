@@ -22,6 +22,7 @@ import {
   forecastRunsListQuerySchema,
   forecastRunsListResponseSchema,
 } from "./forecasts-schema.js";
+import { renderForecastsPage } from "../../web/forecasts-page.js";
 
 export interface ForecastsRuntime {
   limiter: ProtectedUsersLimiter;
@@ -29,6 +30,7 @@ export interface ForecastsRuntime {
 }
 
 export function registerForecastRoutes(app: FastifyInstance, runtime: ForecastsRuntime): void {
+  registerForecastsPage(app, runtime);
   app.get<{ Querystring: Record<string, unknown> }>(
     "/api/forecast-models",
     {
@@ -129,6 +131,35 @@ export function registerForecastRoutes(app: FastifyInstance, runtime: ForecastsR
     },
     async (request) =>
       runtime.service.getRun(requestContext(request.authContext), request.params.id),
+  );
+}
+
+function registerForecastsPage(app: FastifyInstance, runtime: ForecastsRuntime): void {
+  app.get(
+    "/forecasts",
+    {
+      preHandler: [
+        ...protectedBoundary(app, runtime, "GET", "/api/forecast-models", "forecast_models.read"),
+        app.requireAction("forecast_runs.read"),
+      ],
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const [models, runs] = await Promise.all([
+        runtime.service.listModels(context, { limit: "100" }),
+        runtime.service.listRuns(context, { limit: "100" }),
+      ]);
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderForecastsPage({
+            models: models.forecast_models,
+            runs: runs.forecast_runs,
+            role: context.role,
+          }),
+        );
+    },
   );
 }
 
