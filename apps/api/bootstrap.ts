@@ -14,6 +14,8 @@ import { createOptimizerPoliciesRepository } from "../../core/optimizer-policies
 import { createOptimizerPoliciesService } from "../../core/optimizer-policies/optimizer-policies-service.js";
 import { createOptimizerRunsRepository } from "../../core/optimizer-runs/optimizer-runs-repository.js";
 import { createOptimizerRunsService } from "../../core/optimizer-runs/optimizer-runs-service.js";
+import { createNotificationsRepository } from "../../core/notifications/notifications-repository.js";
+import { createNotificationsService } from "../../core/notifications/notifications-service.js";
 import { createPriceTablesRepository } from "../../core/price-tables/price-tables-repository.js";
 import { createPriceTablesService } from "../../core/price-tables/price-tables-service.js";
 import { createRecommendationsRepository } from "../../core/recommendations/recommendations-repository.js";
@@ -258,6 +260,10 @@ function applicationOptions(
         maxMonths: config.backtest?.maxMonths ?? 24,
         defaultSeed: BigInt(config.backtest?.randomSeed ?? 20_260_616),
       }),
+    },
+    notifications: {
+      limiter: usersLimiter,
+      service: createNotificationsService(createNotificationsRepository(database.pool)),
     },
     reports: {
       limiter: usersLimiter,

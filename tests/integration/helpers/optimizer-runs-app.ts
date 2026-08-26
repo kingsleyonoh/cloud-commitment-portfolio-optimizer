@@ -9,6 +9,8 @@ import { buildApp } from "../../../apps/api/app.js";
 import { runMigrations } from "../../../core/db/migrations.js";
 import { createOptimizerRunsRepository } from "../../../core/optimizer-runs/optimizer-runs-repository.js";
 import { createOptimizerRunsService } from "../../../core/optimizer-runs/optimizer-runs-service.js";
+import { createNotificationsRepository } from "../../../core/notifications/notifications-repository.js";
+import { createNotificationsService } from "../../../core/notifications/notifications-service.js";
 import type { Logger } from "../../../core/shared/logger.js";
 import { createLocalObjectStore, type ObjectStore } from "../../../core/shared/objectStore.js";
 import { createApiKeyCredential } from "../../../core/tenant/api-key-credential.js";
@@ -74,6 +76,10 @@ export async function createOptimizerRunsHarness(prefix: string): Promise<Optimi
       service: createOptimizerRunsService(createOptimizerRunsRepository(pool), objectStore, {
         defaultSeed: 20260826n,
       }),
+    },
+    notifications: {
+      limiter: createLocalProtectedUsersLimiter(),
+      service: createNotificationsService(createNotificationsRepository(pool)),
     },
   });
   return {

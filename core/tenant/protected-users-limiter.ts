@@ -34,6 +34,10 @@ export const APPROVALS_MUTATION_LIMIT = 30;
 export const REPORTS_LIST_LIMIT = 120;
 export const BACKTESTS_LIST_LIMIT = 120;
 export const BACKTESTS_MUTATION_LIMIT = 10;
+export const NOTIFICATIONS_LIST_LIMIT = 120;
+export const NOTIFICATIONS_MUTATION_LIMIT = 60;
+export const NOTIFICATION_PREFERENCES_LIST_LIMIT = 60;
+export const NOTIFICATION_PREFERENCES_MUTATION_LIMIT = 30;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
 export type ProtectedUsersRoute =
@@ -65,7 +69,10 @@ export type ProtectedUsersRoute =
   | "/api/approvals/{id}/reject"
   | "/api/backtests"
   | "/api/backtests/{id}"
-  | "/api/reports/{source_type}/{source_id}";
+  | "/api/reports/{source_type}/{source_id}"
+  | "/api/notifications"
+  | "/api/notifications/{id}/read"
+  | "/api/settings/notifications";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
 export interface ProtectedUsersLimiter {
@@ -192,6 +199,14 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   }
   if (route.startsWith("/api/backtests")) {
     return method === "GET" ? BACKTESTS_LIST_LIMIT : BACKTESTS_MUTATION_LIMIT;
+  }
+  if (route === "/api/settings/notifications") {
+    return method === "GET"
+      ? NOTIFICATION_PREFERENCES_LIST_LIMIT
+      : NOTIFICATION_PREFERENCES_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/notifications")) {
+    return method === "GET" ? NOTIFICATIONS_LIST_LIMIT : NOTIFICATIONS_MUTATION_LIMIT;
   }
   if (route.startsWith("/api/recommendations")) return RECOMMENDATIONS_LIST_LIMIT;
   if (route.startsWith("/api/reports")) return REPORTS_LIST_LIMIT;
