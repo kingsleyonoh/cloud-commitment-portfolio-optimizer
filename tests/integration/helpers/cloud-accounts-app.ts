@@ -126,6 +126,24 @@ export async function insertCloudAccount(
     createdAt?: string;
   },
 ): Promise<{ id: string; updatedAt: string }> {
+  if (input.createdAt === undefined) {
+    const result = await pool.query<{ id: string; updated_at: string }>(
+      `INSERT INTO cloud_accounts
+         (tenant_id, provider, external_ref, display_name, currency, tags, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+       RETURNING id, to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at`,
+      [
+        input.tenantId,
+        input.provider,
+        input.externalRef,
+        input.displayName,
+        input.currency ?? "USD",
+        JSON.stringify(input.tags ?? {}),
+        input.isActive ?? true,
+      ],
+    );
+    return { id: result.rows[0]!.id, updatedAt: result.rows[0]!.updated_at };
+  }
   const result = await pool.query<{ id: string; updated_at: string }>(
     `INSERT INTO cloud_accounts
        (tenant_id, provider, external_ref, display_name, currency, tags, is_active, created_at)
@@ -139,7 +157,7 @@ export async function insertCloudAccount(
       input.currency ?? "USD",
       JSON.stringify(input.tags ?? {}),
       input.isActive ?? true,
-      input.createdAt ?? new Date().toISOString(),
+      input.createdAt,
     ],
   );
   return { id: result.rows[0]!.id, updatedAt: result.rows[0]!.updated_at };

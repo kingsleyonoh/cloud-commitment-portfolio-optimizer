@@ -13,6 +13,7 @@ import {
   type ApiKeyRotationRuntime,
 } from "./routes/api-key-rotation.js";
 import { registerCloudAccountsRoutes, type CloudAccountsRuntime } from "./routes/cloud-accounts.js";
+import { registerForecastRoutes, type ForecastsRuntime } from "./routes/forecasts.js";
 import { registerHealthRoutes, type DatabaseProbe } from "./routes/health.js";
 import { registerImportsRoutes, type ImportsRuntime } from "./routes/imports.js";
 import { registerPriceTablesRoutes, type PriceTablesRuntime } from "./routes/price-tables.js";
@@ -38,6 +39,7 @@ export interface BuildAppOptions {
   cloudAccounts?: CloudAccountsRuntime;
   imports?: ImportsRuntime;
   priceTables?: PriceTablesRuntime;
+  forecasts?: ForecastsRuntime;
   registrationTrustedProxyCidrs?: string[];
 }
 
@@ -91,6 +93,7 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
         if (options.cloudAccounts) registerCloudAccountsRoutes(instance, options.cloudAccounts);
         if (options.imports) registerImportsRoutes(instance, options.imports);
         if (options.priceTables) registerPriceTablesRoutes(instance, options.priceTables);
+        if (options.forecasts) registerForecastRoutes(instance, options.forecasts);
         await options.protectedRoutes?.(instance);
       },
     });
