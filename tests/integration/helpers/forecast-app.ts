@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import { buildApp } from "../../../apps/api/app.js";
 import { runMigrations } from "../../../core/db/migrations.js";
 import { createForecastRepository } from "../../../core/forecasting/forecast-repository.js";
+import type { ForecastRepository } from "../../../core/forecasting/forecast-repository.js";
 import { createForecastService } from "../../../core/forecasting/forecast-service.js";
 import type { Logger } from "../../../core/shared/logger.js";
 import { createApiKeyCredential } from "../../../core/tenant/api-key-credential.js";
@@ -24,6 +25,7 @@ export interface ForecastHarness {
   tenantB: string;
   actors: Map<string, string>;
   analystApiKey: string;
+  forecastRepository: ForecastRepository;
 }
 
 export async function createForecastHarness(prefix: string): Promise<ForecastHarness> {
@@ -48,6 +50,7 @@ export async function createForecastHarness(prefix: string): Promise<ForecastHar
     "forecast-tests",
   ]);
   const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const forecastRepository = createForecastRepository(pool);
   const app = buildApp({
     logger: silentLogger(),
     databaseProbe: async () => ({ ready: true }),
@@ -64,7 +67,7 @@ export async function createForecastHarness(prefix: string): Promise<ForecastHar
     },
     forecasts: {
       limiter: createLocalProtectedUsersLimiter(),
-      service: createForecastService(createForecastRepository(pool), { defaultSeed: 20260716n }),
+      service: createForecastService(forecastRepository, { defaultSeed: 20260716n }),
     },
   });
   return {
@@ -76,6 +79,7 @@ export async function createForecastHarness(prefix: string): Promise<ForecastHar
     tenantB,
     actors,
     analystApiKey: credential.plaintext,
+    forecastRepository,
   };
 }
 

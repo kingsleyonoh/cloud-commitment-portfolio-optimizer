@@ -5,7 +5,11 @@ import { bootstrapWorker } from "../../apps/worker/bootstrap.js";
 import type { WorkerResourceName } from "../../apps/worker/resources.js";
 import { expect, it, vi } from "vitest";
 
-const config = {} as Readonly<AppConfig>;
+const config = {
+  database: {},
+  storage: { objectStoragePath: ".tmp/test-object-store" },
+  forecasting: { minHistoryDays: 90 },
+} as Readonly<AppConfig>;
 
 function logger(): Logger {
   const value: Logger = {
@@ -28,6 +32,23 @@ function queue(): JobQueue {
   };
 }
 
+function database() {
+  return {
+    pool: {},
+    health: vi.fn(async () => ({ ready: true })),
+  } as never;
+}
+
+function objectStore() {
+  return {
+    put: vi.fn(async () => undefined),
+    get: vi.fn(async () => Buffer.from("")),
+    delete: vi.fn(async () => undefined),
+    health: vi.fn(async () => ({ ready: true })),
+    close: vi.fn(async () => undefined),
+  };
+}
+
 it("initializes environment, logger, and queue through injection before start", async () => {
   const events: string[] = [];
   const close = vi.fn(async () => {
@@ -45,6 +66,8 @@ it("initializes environment, logger, and queue through injection before start", 
     getConfig: async () => config,
     getLogger: async () => logger(),
     getQueue: async () => queue(),
+    getDatabase: async () => database(),
+    getObjectStore: async () => objectStore(),
     buildApplication: () => worker,
     createCloser: (_worker, acquired) => {
       initialized = new Set(acquired);
@@ -52,7 +75,9 @@ it("initializes environment, logger, and queue through injection before start", 
     },
   });
 
-  expect(initialized).toEqual(new Set<WorkerResourceName>(["environment", "logger", "jobQueue"]));
+  expect(initialized).toEqual(
+    new Set<WorkerResourceName>(["environment", "logger", "jobQueue", "database", "objectStore"]),
+  );
   expect(events).toEqual(["start"]);
   await runtime.close();
   expect(close).toHaveBeenCalledTimes(1);
@@ -68,6 +93,8 @@ it("cleans every initialized resource when queue readiness fails", async () => {
       getConfig: async () => config,
       getLogger: async () => logger(),
       getQueue: async () => queue(),
+      getDatabase: async () => database(),
+      getObjectStore: async () => objectStore(),
       buildApplication: () => ({
         start: async () => Promise.reject(primary),
         close: async () => undefined,
@@ -79,7 +106,9 @@ it("cleans every initialized resource when queue readiness fails", async () => {
     }),
   ).rejects.toBe(primary);
 
-  expect(initialized).toEqual(new Set<WorkerResourceName>(["environment", "logger", "jobQueue"]));
+  expect(initialized).toEqual(
+    new Set<WorkerResourceName>(["environment", "logger", "jobQueue", "database", "objectStore"]),
+  );
   expect(close).toHaveBeenCalledTimes(1);
 });
 
@@ -91,6 +120,8 @@ it("preserves startup and cleanup failures together", async () => {
     getConfig: async () => config,
     getLogger: async () => logger(),
     getQueue: async () => queue(),
+    getDatabase: async () => database(),
+    getObjectStore: async () => objectStore(),
     buildApplication: () => ({
       start: async () => Promise.reject(primary),
       close: async () => undefined,

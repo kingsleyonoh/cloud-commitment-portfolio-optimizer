@@ -1,14 +1,24 @@
 import { closeEnvironmentConfig } from "../../core/config/env.js";
+import { closeDbPool } from "../../core/shared/db.js";
 import { closeJobQueue } from "../../core/shared/jobQueue.js";
 import { closeLogger } from "../../core/shared/logger.js";
+import { closeObjectStore } from "../../core/shared/objectStore.js";
 import type { WorkerApplication } from "./app.js";
 
-export type WorkerResourceName = "jobQueue" | "environment" | "logger";
+export type WorkerResourceName = "jobQueue" | "database" | "objectStore" | "environment" | "logger";
 export type WorkerResourceClosers = Readonly<Record<WorkerResourceName, () => Promise<void>>>;
 
-const closeOrder: readonly WorkerResourceName[] = ["jobQueue", "environment", "logger"];
+const closeOrder: readonly WorkerResourceName[] = [
+  "jobQueue",
+  "database",
+  "objectStore",
+  "environment",
+  "logger",
+];
 const defaultClosers: WorkerResourceClosers = {
   jobQueue: closeJobQueue,
+  database: closeDbPool,
+  objectStore: closeObjectStore,
   environment: closeEnvironmentConfig,
   logger: closeLogger,
 };

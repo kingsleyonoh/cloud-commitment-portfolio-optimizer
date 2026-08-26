@@ -46,6 +46,32 @@ export type ForecastRunRecord = Readonly<{
   updatedAt: string;
 }>;
 
+export type ForecastWorkerModel = Readonly<{
+  id: string;
+  tenantId: string;
+  providerScope: readonly ForecastProvider[];
+  serviceScope: readonly string[];
+  method: ForecastMethod;
+  config: Record<string, unknown>;
+}>;
+
+export type ForecastWorkerRun = ForecastRunRecord &
+  Readonly<{
+    tenantId: string;
+    model: ForecastWorkerModel;
+  }>;
+
+export type ForecastUsageMonth = Readonly<{
+  month: string;
+  provider: ForecastProvider;
+  serviceCode: string;
+  region: string;
+  onDemandCostCents: string;
+  realizedCostCents: string;
+  usageQuantity: string;
+  lineItemCount: number;
+}>;
+
 export type ForecastRun = Readonly<{
   id: string;
   forecast_model_id: string;

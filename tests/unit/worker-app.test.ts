@@ -46,5 +46,33 @@ it("starts with an injected ready queue without enqueueing or polling", async ()
   expect(jobQueue.health).toHaveBeenCalledTimes(1);
   expect(jobQueue.enqueue).not.toHaveBeenCalled();
   expect(workerLogger.info).toHaveBeenCalledTimes(1);
-  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready");
+  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    forecast_processed: false,
+    forecast_run_id: null,
+    forecast_status: null,
+  });
+});
+
+it("processes one forecast run when an injected forecast worker is available", async () => {
+  const jobQueue = queue(true);
+  const workerLogger = logger();
+  const forecasts = {
+    processNextForecastRun: vi.fn(async () => ({
+      processed: true as const,
+      runId: "forecast-run-1",
+      status: "completed" as const,
+      outputUri: "forecasts/forecast-run-1/seasonal-naive-v1.json",
+      warnings: [],
+    })),
+  };
+  const worker = buildWorker({ queue: jobQueue, logger: workerLogger, forecasts });
+
+  await worker.start();
+
+  expect(forecasts.processNextForecastRun).toHaveBeenCalledTimes(1);
+  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    forecast_processed: true,
+    forecast_run_id: "forecast-run-1",
+    forecast_status: "completed",
+  });
 });

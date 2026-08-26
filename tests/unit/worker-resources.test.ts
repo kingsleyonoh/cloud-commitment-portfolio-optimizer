@@ -5,7 +5,13 @@ import {
 } from "../../apps/worker/resources.js";
 import { describe, expect, it, vi } from "vitest";
 
-const names: readonly WorkerResourceName[] = ["jobQueue", "environment", "logger"];
+const names: readonly WorkerResourceName[] = [
+  "jobQueue",
+  "database",
+  "objectStore",
+  "environment",
+  "logger",
+];
 
 function closers(
   events: string[],
@@ -23,7 +29,7 @@ function closers(
 }
 
 describe("worker resource shutdown", () => {
-  it("closes worker boundary, queue, environment, then logger", async () => {
+  it("closes worker boundary, queue, database, object store, environment, then logger", async () => {
     const events: string[] = [];
     const resources = closers(events);
     const worker = {
@@ -34,7 +40,14 @@ describe("worker resource shutdown", () => {
 
     await createWorkerRuntimeCloser(worker, new Set(names), resources)();
 
-    expect(events).toEqual(["worker", "jobQueue", "environment", "logger"]);
+    expect(events).toEqual([
+      "worker",
+      "jobQueue",
+      "database",
+      "objectStore",
+      "environment",
+      "logger",
+    ]);
   });
 
   it("attempts every acquired close, aggregates failures, and is idempotent", async () => {
@@ -53,7 +66,14 @@ describe("worker resource shutdown", () => {
     const failure = await first.catch((error: unknown) => error);
 
     expect(second).toBe(first);
-    expect(events).toEqual(["worker", "jobQueue", "environment", "logger"]);
+    expect(events).toEqual([
+      "worker",
+      "jobQueue",
+      "database",
+      "objectStore",
+      "environment",
+      "logger",
+    ]);
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors).toHaveLength(3);
   });

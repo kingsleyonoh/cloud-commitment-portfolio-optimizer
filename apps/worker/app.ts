@@ -1,4 +1,5 @@
 import { AppError } from "../../core/shared/errors.js";
+import type { ForecastWorker } from "../../core/forecasting/forecast-worker.js";
 import type { JobQueue } from "../../core/shared/jobQueue.js";
 import type { Logger } from "../../core/shared/logger.js";
 
@@ -10,6 +11,7 @@ export interface WorkerApplication {
 export interface BuildWorkerOptions {
   queue: JobQueue;
   logger: Logger;
+  forecasts?: ForecastWorker;
 }
 
 export function buildWorker(options: BuildWorkerOptions): WorkerApplication {
@@ -32,5 +34,10 @@ async function startWorker(options: BuildWorkerOptions): Promise<void> {
       statusCode: 503,
     });
   }
-  await options.logger.info("worker.ready");
+  const forecastResult = await options.forecasts?.processNextForecastRun();
+  await options.logger.info("worker.ready", {
+    forecast_processed: forecastResult?.processed ?? false,
+    forecast_run_id: forecastResult?.processed ? forecastResult.runId : null,
+    forecast_status: forecastResult?.processed ? forecastResult.status : null,
+  });
 }

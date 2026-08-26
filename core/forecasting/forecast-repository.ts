@@ -7,6 +7,8 @@ import type {
   ForecastRunCreateInput,
   ForecastRunListInput,
   ForecastRunRecord,
+  ForecastUsageMonth,
+  ForecastWorkerRun,
 } from "./forecast-types.js";
 
 export interface ForecastRepository {
@@ -20,6 +22,14 @@ export interface ForecastRepository {
   createRun(tenantId: string, input: ForecastRunCreateInput): Promise<ForecastRunRecord | null>;
   listRuns(tenantId: string, input: ForecastRunListInput): Promise<ForecastRunRecord[]>;
   getRun(tenantId: string, id: string): Promise<ForecastRunRecord | null>;
+  claimNextQueuedRun(): Promise<ForecastWorkerRun | null>;
+  listUsageMonths(run: ForecastWorkerRun): Promise<ForecastUsageMonth[]>;
+  completeRun(
+    runId: string,
+    outputUri: string,
+    qualityMetrics: Record<string, unknown>,
+  ): Promise<void>;
+  failRun(runId: string, code: string): Promise<void>;
 }
 
 interface ForecastModelRow extends QueryResultRow {
@@ -76,6 +86,11 @@ export function createForecastRepository(pool: Pool): ForecastRepository {
     createRun: (tenantId, input) => createRun(pool, tenantId, input),
     listRuns: (tenantId, input) => listRuns(pool, tenantId, input),
     getRun: (tenantId, id) => getRun(pool, tenantId, id),
+    claimNextQueuedRun: () => claimNextQueuedRun(pool),
+    listUsageMonths: (run) => listUsageMonths(pool, run),
+    completeRun: (runId, outputUri, qualityMetrics) =>
+      completeRun(pool, runId, outputUri, qualityMetrics),
+    failRun: (runId, code) => failRun(pool, runId, code),
   };
 }
 
@@ -218,6 +233,133 @@ async function getRun(pool: Pool, tenantId: string, id: string): Promise<Forecas
   return result.rows[0] ? freezeRun(result.rows[0]) : null;
 }
 
+async function claimNextQueuedRun(pool: Pool): Promise<ForecastWorkerRun | null> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const candidate = await client.query<{ id: string }>(
+      `SELECT id
+         FROM forecast_runs
+        WHERE status = 'queued'
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1`,
+    );
+    const id = candidate.rows[0]?.id;
+    if (!id) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const updated = await client.query<ForecastRunRow & { tenantId: string }>(
+      `UPDATE forecast_runs
+          SET status = 'running'
+        WHERE id = $1 AND status = 'queued'
+        RETURNING tenant_id AS "tenantId", ${RUN_PROJECTION}`,
+      [id],
+    );
+    const run = updated.rows[0];
+    if (!run) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const model = await client.query<ForecastModelRow & { tenantId: string }>(
+      `SELECT tenant_id AS "tenantId", ${MODEL_PROJECTION}
+         FROM forecast_models
+        WHERE tenant_id = $1 AND id = $2`,
+      [run.tenantId, run.forecastModelId],
+    );
+    await client.query("COMMIT");
+    const modelRow = model.rows[0];
+    if (!modelRow) return null;
+    return freezeWorkerRun(run, modelRow);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function listUsageMonths(pool: Pool, run: ForecastWorkerRun): Promise<ForecastUsageMonth[]> {
+  const result = await pool.query<
+    QueryResultRow & {
+      month: string;
+      provider: "aws";
+      serviceCode: string;
+      region: string;
+      onDemandCostCents: string;
+      realizedCostCents: string;
+      usageQuantity: string;
+      lineItemCount: number;
+    }
+  >(
+    `SELECT to_char(date_trunc('month', usage_start AT TIME ZONE 'UTC'), 'YYYY-MM') AS month,
+            provider,
+            service_code AS "serviceCode",
+            region,
+            sum(on_demand_cost_cents)::text AS "onDemandCostCents",
+            sum(realized_cost_cents)::text AS "realizedCostCents",
+            sum(usage_quantity)::text AS "usageQuantity",
+            count(*)::int AS "lineItemCount"
+       FROM usage_line_items
+      WHERE tenant_id = $1
+        AND provider = ANY($2::text[])
+        AND service_code = ANY($3::text[])
+        AND usage_start >= $4::date
+        AND usage_end <= ($5::date + interval '1 day')
+      GROUP BY month, provider, service_code, region
+      ORDER BY month ASC, provider ASC, service_code ASC, region ASC`,
+    [
+      run.tenantId,
+      run.model.providerScope,
+      run.model.serviceScope,
+      run.inputWindowStart,
+      run.inputWindowEnd,
+    ],
+  );
+  return result.rows.map((row) =>
+    Object.freeze({
+      month: row.month,
+      provider: row.provider,
+      serviceCode: row.serviceCode,
+      region: row.region,
+      onDemandCostCents: row.onDemandCostCents,
+      realizedCostCents: row.realizedCostCents,
+      usageQuantity: row.usageQuantity,
+      lineItemCount: row.lineItemCount,
+    }),
+  );
+}
+
+async function completeRun(
+  pool: Pool,
+  runId: string,
+  outputUri: string,
+  qualityMetrics: Record<string, unknown>,
+): Promise<void> {
+  await pool.query(
+    `UPDATE forecast_runs
+        SET status = 'completed',
+            output_uri = $2,
+            quality_metrics = $3::jsonb,
+            error_details = '{}'::jsonb
+      WHERE id = $1 AND status = 'running'`,
+    [runId, outputUri, JSON.stringify(qualityMetrics)],
+  );
+}
+
+async function failRun(pool: Pool, runId: string, code: string): Promise<void> {
+  await pool.query(
+    `UPDATE forecast_runs
+        SET status = 'failed',
+            output_uri = NULL,
+            quality_metrics = '{}'::jsonb,
+            error_details = $2::jsonb
+      WHERE id = $1 AND status = 'running'`,
+    [runId, JSON.stringify({ code })],
+  );
+}
+
 async function getModelWithClient(
   client: PoolClient,
   tenantId: string,
@@ -285,5 +427,23 @@ function freezeRun(row: ForecastRunRow): ForecastRunRecord {
     errorDetails: Object.freeze({ ...row.errorDetails }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  });
+}
+
+function freezeWorkerRun(
+  run: ForecastRunRow & { tenantId: string },
+  model: ForecastModelRow & { tenantId: string },
+): ForecastWorkerRun {
+  return Object.freeze({
+    ...freezeRun(run),
+    tenantId: run.tenantId,
+    model: Object.freeze({
+      id: model.id,
+      tenantId: model.tenantId,
+      providerScope: Object.freeze(model.providerScope as ["aws"]),
+      serviceScope: Object.freeze([...model.serviceScope]),
+      method: model.method,
+      config: Object.freeze({ ...model.config }),
+    }),
   });
 }
