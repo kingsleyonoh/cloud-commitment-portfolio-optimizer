@@ -8,11 +8,14 @@ import type { OptimizerRunsRepository } from "./optimizer-runs-repository.js";
 import type {
   OptimizerRun,
   OptimizerRunDetail,
+  OptimizerRunListPage,
   OptimizerRunRecord,
+  OptimizerRunStatus,
 } from "./optimizer-runs-types.js";
 
 export interface OptimizerRunsService {
   create(context: RequestContext, body: unknown): Promise<OptimizerRun>;
+  list(context: RequestContext, query: unknown): Promise<OptimizerRunListPage>;
   get(context: RequestContext, id: unknown): Promise<OptimizerRunDetail>;
 }
 
@@ -28,6 +31,7 @@ export function createOptimizerRunsService(
   return {
     create: (context, body) =>
       createRun(repository, objectStore, options.defaultSeed, context, body),
+    list: (context, query) => listRuns(repository, context, query),
     get: (context, id) => getRun(repository, objectStore, context, id),
   };
 }
@@ -71,6 +75,16 @@ async function createRun(
   return toRun(row);
 }
 
+async function listRuns(
+  repository: OptimizerRunsRepository,
+  context: RequestContext,
+  query: unknown,
+): Promise<OptimizerRunListPage> {
+  const input = parseListQuery(query);
+  const rows = await safe(() => repository.list(context.tenantId, input));
+  return { optimizer_runs: rows.map(toRun) };
+}
+
 async function getRun(
   repository: OptimizerRunsRepository,
   objectStore: ObjectStore,
@@ -86,6 +100,35 @@ async function getRun(
       ? await readFrontierSummary(objectStore, row.frontierUri)
       : null,
   };
+}
+
+const RUN_STATUSES: ReadonlySet<string> = new Set([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "infeasible",
+  "cancelled",
+]);
+
+function parseListQuery(query: unknown): { limit: number; status?: OptimizerRunStatus } {
+  if (!query || typeof query !== "object" || Array.isArray(query)) return { limit: 50 };
+  const input = query as Record<string, unknown>;
+  const allowed = new Set(["limit", "status"]);
+  if (Object.keys(input).some((key) => !allowed.has(key))) throw validationError();
+  const limitValue = input.limit;
+  const limit =
+    limitValue === undefined
+      ? 50
+      : typeof limitValue === "string" && /^(?:[1-9]|[1-9][0-9]|100)$/u.test(limitValue)
+        ? Number(limitValue)
+        : null;
+  if (limit === null) throw validationError();
+  const status = input.status;
+  if (status !== undefined && (typeof status !== "string" || !RUN_STATUSES.has(status))) {
+    throw validationError();
+  }
+  return status === undefined ? { limit } : { limit, status: status as OptimizerRunStatus };
 }
 
 async function readFrontierSummary(
@@ -160,6 +203,15 @@ function unavailable(): AppError {
     code: "OPTIMIZER_RUNS_UNAVAILABLE",
     message: "Optimizer runs are temporarily unavailable.",
     statusCode: 503,
+    details: [],
+  });
+}
+
+function validationError(): AppError {
+  return new AppError({
+    code: "VALIDATION_ERROR",
+    message: "Request is invalid.",
+    statusCode: 400,
     details: [],
   });
 }

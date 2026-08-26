@@ -40,6 +40,18 @@ export const optimizerRunCreateBodySchema = {
   },
 } as const;
 
+export const optimizerRunsListQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "string", pattern: "^(?:[1-9]|[1-9][0-9]|100)$" },
+    status: {
+      type: "string",
+      enum: ["queued", "running", "completed", "failed", "infeasible", "cancelled"],
+    },
+  },
+} as const;
+
 export const optimizerRunSchema = {
   type: "object",
   additionalProperties: false,
@@ -95,6 +107,15 @@ export const optimizerRunDetailSchema = {
     frontier_summary: {
       anyOf: [{ type: "object", additionalProperties: true }, { type: "null" }],
     },
+  },
+} as const;
+
+export const optimizerRunsListResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["optimizer_runs"],
+  properties: {
+    optimizer_runs: { type: "array", items: optimizerRunSchema },
   },
 } as const;
 

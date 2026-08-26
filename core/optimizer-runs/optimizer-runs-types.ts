@@ -83,6 +83,15 @@ export type OptimizerRun = Readonly<{
   updated_at: string;
 }>;
 
+export type OptimizerRunListPage = Readonly<{
+  optimizer_runs: readonly OptimizerRun[];
+}>;
+
+export type OptimizerRunListInput = Readonly<{
+  limit: number;
+  status?: OptimizerRunStatus;
+}>;
+
 export type OptimizerRunDetail = Readonly<{
   optimizer_run: OptimizerRun;
   frontier_summary: Record<string, unknown> | null;

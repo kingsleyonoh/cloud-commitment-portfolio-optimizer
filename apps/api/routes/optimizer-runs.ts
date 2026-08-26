@@ -15,8 +15,11 @@ import {
   optimizerRunDetailSchema,
   optimizerRunPathSchema,
   optimizerRunSchema,
+  optimizerRunsListQuerySchema,
+  optimizerRunsListResponseSchema,
   optimizerRunsResponseSchemas,
 } from "./optimizer-runs-schema.js";
+import { renderOptimizerRunsPage } from "../../web/optimizer-runs-page.js";
 
 export interface OptimizerRunsRuntime {
   limiter: ProtectedUsersLimiter;
@@ -27,6 +30,45 @@ export function registerOptimizerRunsRoutes(
   app: FastifyInstance,
   runtime: OptimizerRunsRuntime,
 ): void {
+  app.get(
+    "/optimizer-runs",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/optimizer-runs",
+        "optimizer_runs.read",
+      ),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderOptimizerRunsPage({ runs: page.optimizer_runs, role: context.role }));
+    },
+  );
+
+  app.get<{ Querystring: Record<string, unknown> }>(
+    "/api/optimizer-runs",
+    {
+      preHandler: protectedBoundary(
+        app,
+        runtime,
+        "GET",
+        "/api/optimizer-runs",
+        "optimizer_runs.read",
+      ),
+      schema: {
+        querystring: optimizerRunsListQuerySchema,
+        response: { 200: optimizerRunsListResponseSchema, ...optimizerRunsResponseSchemas },
+      },
+    },
+    async (request) => runtime.service.list(requestContext(request.authContext), request.query),
+  );
+
   app.post<{ Body: unknown }>(
     "/api/optimizer-runs",
     {

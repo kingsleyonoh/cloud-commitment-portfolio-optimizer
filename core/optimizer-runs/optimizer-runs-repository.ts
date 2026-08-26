@@ -3,6 +3,7 @@ import type { Pool, QueryResultRow } from "pg";
 import { AppError } from "../shared/errors.js";
 import type {
   OptimizerRunCreateInput,
+  OptimizerRunListInput,
   OptimizerRunForecastSnapshot,
   OptimizerRunPolicySnapshot,
   OptimizerPriceItem,
@@ -21,6 +22,7 @@ export interface OptimizerRunsRepository {
     input: OptimizerRunCreateInput,
   ): Promise<ResolvedOptimizerRunInputs | null>;
   create(tenantId: string, input: OptimizerRunSnapshotInput): Promise<OptimizerRunRecord>;
+  list(tenantId: string, input: OptimizerRunListInput): Promise<OptimizerRunRecord[]>;
   get(tenantId: string, id: string): Promise<OptimizerRunRecord | null>;
   claimNextQueuedOptimizerRun(): Promise<OptimizerWorkerRun | null>;
   listFrozenPriceItems(run: OptimizerWorkerRun): Promise<OptimizerPriceItem[]>;
@@ -67,6 +69,7 @@ export function createOptimizerRunsRepository(pool: Pool): OptimizerRunsReposito
   return {
     resolveInputs: (tenantId, input) => resolveInputs(pool, tenantId, input),
     create: (tenantId, input) => create(pool, tenantId, input),
+    list: (tenantId, input) => list(pool, tenantId, input),
     get: (tenantId, id) => get(pool, tenantId, id),
     claimNextQueuedOptimizerRun: () => claimNextQueuedOptimizerRun(pool),
     listFrozenPriceItems: (run) => listFrozenPriceItems(pool, run),
@@ -257,6 +260,23 @@ async function priceSnapshots(
   );
   if (explicitIds && result.rowCount !== explicitIds.length) return null;
   return Object.freeze(result.rows.map((row) => Object.freeze({ ...row })));
+}
+
+async function list(
+  pool: Pool,
+  tenantId: string,
+  input: OptimizerRunListInput,
+): Promise<OptimizerRunRecord[]> {
+  const result = await pool.query<OptimizerRunRow>(
+    `SELECT ${RUN_PROJECTION}
+       FROM optimizer_runs
+      WHERE tenant_id = $1
+        AND ($2::text IS NULL OR status = $2)
+      ORDER BY created_at DESC, id DESC
+      LIMIT $3`,
+    [tenantId, input.status ?? null, input.limit],
+  );
+  return result.rows.map(freezeRun);
 }
 
 async function get(pool: Pool, tenantId: string, id: string): Promise<OptimizerRunRecord | null> {
