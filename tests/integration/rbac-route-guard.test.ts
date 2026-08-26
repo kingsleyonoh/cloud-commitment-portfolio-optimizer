@@ -32,6 +32,7 @@ const P1_ANALYST = new Set<AuthAction>([
   "optimizer_runs.read",
   "optimizer_runs.run",
   "recommendations.read",
+  "recommendations.request_approval",
   "reports.read",
 ]);
 const P1_ADMIN = new Set<AuthAction>([
@@ -42,6 +43,8 @@ const P1_ADMIN = new Set<AuthAction>([
   "api_keys.read_rotate",
   "price_tables.create_activate",
   "optimizer_policies.write",
+  "recommendations.approve_reject",
+  "approvals.read",
   "tenant_settings.write",
 ]);
 const API_KEY_ALLOWED = new Set<AuthAction>(
@@ -50,7 +53,11 @@ const API_KEY_ALLOWED = new Set<AuthAction>(
 const expectedByRole: Record<UserRole, ReadonlySet<AuthAction>> = {
   tenant_admin: P1_ADMIN,
   finops_analyst: P1_ANALYST,
-  finance_approver: new Set(),
+  finance_approver: new Set<AuthAction>([
+    "recommendations.read",
+    "recommendations.approve_reject",
+    "approvals.read",
+  ]),
   read_only_auditor: new Set(),
 };
 

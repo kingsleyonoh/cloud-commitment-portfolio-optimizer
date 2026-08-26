@@ -6,6 +6,8 @@ import { join, resolve } from "node:path";
 import { Pool } from "pg";
 
 import { buildApp } from "../../../apps/api/app.js";
+import { createApprovalsRepository } from "../../../core/approvals/approvals-repository.js";
+import { createApprovalsService } from "../../../core/approvals/approvals-service.js";
 import { runMigrations } from "../../../core/db/migrations.js";
 import { createRecommendationsRepository } from "../../../core/recommendations/recommendations-repository.js";
 import { createRecommendationsService } from "../../../core/recommendations/recommendations-service.js";
@@ -78,6 +80,13 @@ export async function createRecommendationsHarness(
     recommendations: {
       limiter: createLocalProtectedUsersLimiter(),
       service: createRecommendationsService(recommendationsRepository),
+    },
+    approvals: {
+      limiter: createLocalProtectedUsersLimiter(),
+      service: createApprovalsService(createApprovalsRepository(pool), {
+        expiryHours: 24,
+        now: () => new Date("2026-08-26T00:00:00.000Z"),
+      }),
     },
     reports: {
       limiter: createLocalProtectedUsersLimiter(),

@@ -137,6 +137,196 @@ describe("GET /api/recommendations/{id}", () => {
   });
 });
 
+describe("approval workflow API", () => {
+  it("lets an analyst request approval for a pending approval recommendation with a frozen packet", async () => {
+    const fixture = await createRecommendation("approval-request", harness.tenantA, {
+      status: "pending_approval",
+      approvalRequired: true,
+      expectedSavingsCents: "350000",
+      riskBand: "medium",
+    });
+    const assignedTo = harness.actors.get("finance_approver")!;
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/api/recommendations/${fixture.recommendationId}/request-approval`,
+      headers: { "x-api-key": harness.analystApiKey },
+      payload: {
+        assigned_to_user_id: assignedTo,
+        reason: "Monthly commitment exceeds auto-approval threshold.",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      recommendation_id: fixture.recommendationId,
+      status: "pending",
+      requested_by_user_id: null,
+      assigned_to_user_id: assignedTo,
+      workflow_execution_id: null,
+      decision_reason: null,
+      expires_at: "2026-08-27T00:00:00.000000Z",
+      approval_snapshot: {
+        contract_version: "approval_packet:v1",
+        tenant: {
+          contact: {
+            email: "finance@example.invalid",
+            finance_owner_email: "finops@example.invalid",
+          },
+        },
+        recommendation: {
+          id: fixture.recommendationId,
+          expected_savings_cents: "350000",
+          risk_band: "medium",
+        },
+        approval: {
+          status: "pending",
+          assigned_to: expect.stringContaining("finance_approver-"),
+          decision_reason: null,
+          request_reason: "Monthly commitment exceeds auto-approval threshold.",
+        },
+      },
+    });
+    expect(response.body).not.toMatch(
+      /approval_token|tenant_id|credential|password|secret|token|raw_row|stack/iu,
+    );
+
+    const duplicate = await harness.app.inject({
+      method: "POST",
+      url: `/api/recommendations/${fixture.recommendationId}/request-approval`,
+      headers: recommendationsAuthorization(harness, "finops_analyst", "finops_analyst"),
+      payload: { assigned_to_user_id: assignedTo, reason: "Duplicate request" },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error.code).toBe("APPROVAL_STATE_INVALID");
+  });
+
+  it("rejects non-approval recommendations, cross-tenant assignees, and unknown body fields", async () => {
+    const ready = await createRecommendation("approval-ready", harness.tenantA, {
+      status: "ready",
+      approvalRequired: false,
+    });
+    const foreignUser = await insertForeignApprover();
+
+    for (const payload of [
+      { assigned_to_user_id: harness.actors.get("finance_approver")!, reason: "not required" },
+      { assigned_to_user_id: foreignUser, reason: "foreign" },
+      { reason: "unknown", unknown: true },
+    ]) {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: `/api/recommendations/${ready.recommendationId}/request-approval`,
+        headers: recommendationsAuthorization(harness, "finops_analyst", "finops_analyst"),
+        payload,
+      });
+      expect([400, 404, 409]).toContain(response.statusCode);
+      expect(response.body).not.toContain(harness.tenantB);
+    }
+  });
+
+  it("lists and reads approval details for approvers while denying API-key approval reads", async () => {
+    const fixture = await createRecommendation("approval-list", harness.tenantA, {
+      status: "pending_approval",
+      approvalRequired: true,
+    });
+    const approval = await requestApproval(fixture.recommendationId);
+    const foreignFixture = await createRecommendation("approval-list-hidden", harness.tenantB, {
+      status: "pending_approval",
+      approvalRequired: true,
+    });
+    await insertApprovalRow(foreignFixture.recommendationId, harness.tenantB);
+
+    const list = await harness.app.inject({
+      method: "GET",
+      url: `/api/approvals?status=pending&recommendation_id=${fixture.recommendationId}&limit=1`,
+      headers: recommendationsAuthorization(harness, "finance_approver", "finance_approver"),
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({
+      approvals: [{ id: approval.id, recommendation_id: fixture.recommendationId }],
+      next_cursor: null,
+    });
+    expect(list.body).not.toContain(harness.tenantB);
+
+    const detail = await harness.app.inject({
+      method: "GET",
+      url: `/api/approvals/${approval.id}`,
+      headers: recommendationsAuthorization(harness, "finance_approver", "finance_approver"),
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({
+      approval: { id: approval.id, status: "pending" },
+      recommendation: { id: fixture.recommendationId, status: "pending_approval" },
+    });
+
+    const apiKeyRead = await harness.app.inject({
+      method: "GET",
+      url: `/api/approvals/${approval.id}`,
+      headers: { "x-api-key": harness.analystApiKey },
+    });
+    expect(apiKeyRead.statusCode).toBe(403);
+  });
+
+  it("approves and rejects through Finance Approver/Admin roles with atomic recommendation state updates", async () => {
+    const approveFixture = await createRecommendation("approval-approve", harness.tenantA, {
+      status: "pending_approval",
+      approvalRequired: true,
+    });
+    const approval = await requestApproval(approveFixture.recommendationId);
+
+    const approved = await harness.app.inject({
+      method: "POST",
+      url: `/api/approvals/${approval.id}/approve`,
+      headers: recommendationsAuthorization(harness, "finance_approver", "finance_approver"),
+      payload: { decision_reason: "Approved within risk budget." },
+    });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toMatchObject({
+      approval: {
+        id: approval.id,
+        status: "approved",
+        decision_reason: "Approved within risk budget.",
+      },
+      recommendation: { id: approveFixture.recommendationId, status: "approved" },
+    });
+
+    const secondDecision = await harness.app.inject({
+      method: "POST",
+      url: `/api/approvals/${approval.id}/reject`,
+      headers: recommendationsAuthorization(harness),
+      payload: { decision_reason: "Changing a terminal decision is not allowed." },
+    });
+    expect(secondDecision.statusCode).toBe(409);
+
+    const rejectFixture = await createRecommendation("approval-reject", harness.tenantA, {
+      status: "pending_approval",
+      approvalRequired: true,
+    });
+    const rejection = await requestApproval(rejectFixture.recommendationId);
+    const rejected = await harness.app.inject({
+      method: "POST",
+      url: `/api/approvals/${rejection.id}/reject`,
+      headers: recommendationsAuthorization(harness),
+      payload: { decision_reason: "Contract term is not acceptable." },
+    });
+    expect(rejected.statusCode).toBe(200);
+    expect(rejected.json().recommendation.status).toBe("rejected");
+
+    for (const headers of [
+      recommendationsAuthorization(harness, "finops_analyst", "finops_analyst"),
+      { "x-api-key": harness.analystApiKey },
+    ]) {
+      const denied = await harness.app.inject({
+        method: "POST",
+        url: `/api/approvals/${rejection.id}/approve`,
+        headers,
+        payload: { decision_reason: "Denied before mutation." },
+      });
+      expect(denied.statusCode).toBe(403);
+    }
+  });
+});
+
 describe("GET /api/reports/{source_type}/{source_id}", () => {
   it("captures and renders a recommendation report snapshot without approval tokens", async () => {
     const fixture = await createRecommendation("report", harness.tenantA);
@@ -434,4 +624,47 @@ async function createRecommendation(
     ],
   );
   return { runId: run.rows[0]!.id, recommendationId: recommendation.rows[0]!.id };
+}
+
+async function requestApproval(recommendationId: string) {
+  const response = await harness.app.inject({
+    method: "POST",
+    url: `/api/recommendations/${recommendationId}/request-approval`,
+    headers: recommendationsAuthorization(harness, "finops_analyst", "finops_analyst"),
+    payload: {
+      assigned_to_user_id: harness.actors.get("finance_approver"),
+      reason: "Needs finance approval.",
+    },
+  });
+  expect(response.statusCode).toBe(201);
+  return response.json() as { id: string };
+}
+
+async function insertApprovalRow(recommendationId: string, tenantId: string): Promise<void> {
+  await harness.pool.query(
+    `INSERT INTO approvals
+       (tenant_id, recommendation_id, status, approval_snapshot, expires_at)
+     VALUES ($1, $2, 'pending', $3::jsonb, '2026-08-27T00:00:00.000Z')`,
+    [
+      tenantId,
+      recommendationId,
+      JSON.stringify({
+        contract_version: "approval_packet:v1",
+        tenant: { contact: { finance_owner_email: "foreign@example.invalid" } },
+        recommendation: { id: recommendationId },
+        approval: { status: "pending", assigned_to: null, decision_reason: null },
+      }),
+    ],
+  );
+}
+
+async function insertForeignApprover(): Promise<string> {
+  return (
+    await harness.pool.query<{ id: string }>(
+      `INSERT INTO users (tenant_id, email, name, role)
+       VALUES ($1, $2, 'Foreign Approver', 'finance_approver')
+       RETURNING id`,
+      [harness.tenantB, `foreign-approver-${randomUUID()}@example.invalid`],
+    )
+  ).rows[0]!.id;
 }

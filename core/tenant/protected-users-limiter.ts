@@ -29,6 +29,8 @@ export const OPTIMIZER_POLICIES_MUTATION_LIMIT = 30;
 export const OPTIMIZER_RUNS_LIST_LIMIT = 120;
 export const OPTIMIZER_RUNS_MUTATION_LIMIT = 20;
 export const RECOMMENDATIONS_LIST_LIMIT = 120;
+export const APPROVALS_LIST_LIMIT = 120;
+export const APPROVALS_MUTATION_LIMIT = 30;
 export const REPORTS_LIST_LIMIT = 120;
 
 export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
@@ -54,6 +56,11 @@ export type ProtectedUsersRoute =
   | "/api/optimizer-runs/{id}"
   | "/api/recommendations"
   | "/api/recommendations/{id}"
+  | "/api/recommendations/{id}/request-approval"
+  | "/api/approvals"
+  | "/api/approvals/{id}"
+  | "/api/approvals/{id}/approve"
+  | "/api/approvals/{id}/reject"
   | "/api/reports/{source_type}/{source_id}";
 export type ProtectedUsersLimitDecision = RollingWindowDecision;
 
@@ -175,6 +182,9 @@ function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsers
   }
   if (route.startsWith("/api/optimizer-runs")) {
     return method === "GET" ? OPTIMIZER_RUNS_LIST_LIMIT : OPTIMIZER_RUNS_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/approvals")) {
+    return method === "GET" ? APPROVALS_LIST_LIMIT : APPROVALS_MUTATION_LIMIT;
   }
   if (route.startsWith("/api/recommendations")) return RECOMMENDATIONS_LIST_LIMIT;
   if (route.startsWith("/api/reports")) return REPORTS_LIST_LIMIT;

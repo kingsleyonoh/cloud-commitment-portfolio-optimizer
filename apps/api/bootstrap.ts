@@ -1,5 +1,7 @@
 import type { AddressInfo } from "node:net";
 import type { AppConfig } from "../../core/config/env.js";
+import { createApprovalsRepository } from "../../core/approvals/approvals-repository.js";
+import { createApprovalsService } from "../../core/approvals/approvals-service.js";
 import { createDashboardRepository } from "../../core/dashboard/dashboard-repository.js";
 import { createDashboardService } from "../../core/dashboard/dashboard-service.js";
 import { createImportsRepository } from "../../core/imports/imports-repository.js";
@@ -241,6 +243,12 @@ function applicationOptions(
     recommendations: {
       limiter: usersLimiter,
       service: createRecommendationsService(createRecommendationsRepository(database.pool)),
+    },
+    approvals: {
+      limiter: usersLimiter,
+      service: createApprovalsService(createApprovalsRepository(database.pool), {
+        expiryHours: config.approvals?.expiryHours ?? 168,
+      }),
     },
     reports: {
       limiter: usersLimiter,
