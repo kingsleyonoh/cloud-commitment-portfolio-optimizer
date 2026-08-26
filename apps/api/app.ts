@@ -28,6 +28,7 @@ import {
   type RecommendationsRuntime,
 } from "./routes/recommendations.js";
 import { registerReportsRoutes, type ReportsRuntime } from "./routes/reports.js";
+import { registerSettingsRoute } from "./routes/settings.js";
 import {
   registerTenantRegistrationRoute,
   type TenantRegistrationRuntime,
@@ -119,6 +120,14 @@ function registerApplicationRoutes(app: FastifyInstance, options: BuildAppOption
           registerRecommendationsRoutes(instance, options.recommendations);
         }
         if (options.reports) registerReportsRoutes(instance, options.reports);
+        if (options.tenantProfile && options.users && options.apiKeys) {
+          registerSettingsRoute(instance, {
+            apiKeys: options.apiKeys.service,
+            limiter: options.users.limiter,
+            tenantProfile: options.tenantProfile.service,
+            users: options.users.service,
+          });
+        }
         await options.protectedRoutes?.(instance);
       },
     });
