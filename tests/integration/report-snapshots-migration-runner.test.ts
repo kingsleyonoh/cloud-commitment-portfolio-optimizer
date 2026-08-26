@@ -38,6 +38,7 @@ const migrations = [
   "0018_create_optimizer_runs.sql",
   "0019_create_recommendations.sql",
   "0020_create_report_snapshots.sql",
+  "0021_create_approvals.sql",
 ] as const;
 const acceptedHashes: Record<string, string> = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -138,8 +139,8 @@ describe("production report snapshot migration runner and CLI", () => {
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
 
-    expect(result.stdout).toContain("Migrations complete: 20 applied, 0 unchanged.");
-    expect(result.stdout).toContain("applied 0020_create_report_snapshots.sql");
+    expect(result.stdout).toContain("Migrations complete: 21 applied, 0 unchanged.");
+    expect(result.stdout).toContain("applied 0021_create_approvals.sql");
     expect(result.stderr).toBe("");
   });
 

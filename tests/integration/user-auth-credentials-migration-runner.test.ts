@@ -39,6 +39,7 @@ const allMigrationFilenames = [
   "0018_create_optimizer_runs.sql",
   "0019_create_recommendations.sql",
   "0020_create_report_snapshots.sql",
+  "0021_create_approvals.sql",
 ] as const;
 const acceptedHashes = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -101,7 +102,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
     );
   });
 
-  it("applies the current plan through 0020, re-applies unchanged, and CLI reports counts only", async () => {
+  it("applies the current plan through 0021, re-applies unchanged, and CLI reports counts only", async () => {
     const database = await freshDatabase("ccpo_user_credentials_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -117,7 +118,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
     expect(first).toEqual({ applied: [...allMigrationFilenames], skipped: [] });
     expect(second).toEqual({ applied: [], skipped: [...allMigrationFilenames] });
     expect(receipts.rows.map(({ filename }) => filename)).toEqual([...allMigrationFilenames]);
-    expect(cli.stdout).toBe("Migrations complete: 0 applied, 20 unchanged.\n");
+    expect(cli.stdout).toBe("Migrations complete: 0 applied, 21 unchanged.\n");
     expect(cli.stderr).toBe("");
     expect(await readCounts(database.url)).toEqual({ credentials: "0", users: "0" });
   });
@@ -129,7 +130,7 @@ describe("production user-auth-credentials migration runner and CLI", () => {
       cwd: resolve("."),
       env: { ...process.env, DATABASE_URL: database.url },
     });
-    expect(result.stdout).toContain("Migrations complete: 20 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 21 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0013_create_price_table_items.sql");
     expect(result.stderr).toBe("");
     expect(await readCounts(database.url)).toEqual({ credentials: "0", users: "0" });

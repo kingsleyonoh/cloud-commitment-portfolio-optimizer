@@ -126,6 +126,7 @@ describe("credential-free users schema", () => {
     `);
 
     expect(functions.rows.map(({ name }) => name)).toEqual([
+      "enforce_approval_lifecycle",
       "enforce_forecast_model_lifecycle",
       "enforce_forecast_run_lifecycle",
       "enforce_optimizer_policy_lifecycle",
@@ -176,6 +177,7 @@ describe("credential-free users schema", () => {
     expect(tables.rows.map(({ tablename }) => tablename)).toEqual([
       "_ccpo_schema_migrations",
       "api_keys",
+      "approvals",
       "audit_log",
       "auth_refresh_families",
       "auth_refresh_tokens",
