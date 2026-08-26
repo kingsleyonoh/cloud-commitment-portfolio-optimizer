@@ -39,6 +39,7 @@ const migrations = [
   "0019_create_recommendations.sql",
   "0020_create_report_snapshots.sql",
   "0021_create_approvals.sql",
+  "0022_create_backtest_runs.sql",
 ] as const;
 const acceptedHashes: Record<string, string> = {
   "0001_create_tenants.sql": "f632eabead4e31d046f84656f0be6ece901d1c9447be81d40ed98303db3b24c5",
@@ -103,7 +104,7 @@ describe("production forecast migration runner and CLI", () => {
     }
   });
 
-  it("applies through 0021, reapplies unchanged, and creates zero rows", async () => {
+  it("applies through 0022, reapplies unchanged, and creates zero rows", async () => {
     const database = await fresh("ccpo_forecast_apply");
     const first = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
     const second = await runMigrations({ databaseUrl: database.url, migrationsDirectory });
@@ -126,7 +127,7 @@ describe("production forecast migration runner and CLI", () => {
       [resolve("node_modules/tsx/dist/cli.mjs"), resolve("scripts/db-migrate.ts")],
       { cwd: resolve("."), env: { ...process.env, DATABASE_URL: database.url } },
     );
-    expect(result.stdout).toContain("Migrations complete: 21 applied, 0 unchanged.");
+    expect(result.stdout).toContain("Migrations complete: 22 applied, 0 unchanged.");
     expect(result.stdout).toContain("applied 0014_create_forecast_models.sql");
     expect(result.stdout).toContain("applied 0015_create_forecast_runs.sql");
     expect(result.stderr).toBe("");
@@ -146,7 +147,7 @@ describe("production forecast migration runner and CLI", () => {
     await client.end();
     expect(results).toContainEqual({ applied: [...migrations], skipped: [] });
     expect(results).toContainEqual({ applied: [], skipped: [...migrations] });
-    expect(receipts.rows[0]?.count).toBe("21");
+    expect(receipts.rows[0]?.count).toBe("22");
   });
 
   it.each([13, 14])("rolls back failed migration index %s and rejects drift", async (index) => {

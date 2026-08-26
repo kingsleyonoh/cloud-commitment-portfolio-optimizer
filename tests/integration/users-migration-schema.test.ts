@@ -127,6 +127,7 @@ describe("credential-free users schema", () => {
 
     expect(functions.rows.map(({ name }) => name)).toEqual([
       "enforce_approval_lifecycle",
+      "enforce_backtest_run_lifecycle",
       "enforce_forecast_model_lifecycle",
       "enforce_forecast_run_lifecycle",
       "enforce_optimizer_policy_lifecycle",
@@ -181,6 +182,7 @@ describe("credential-free users schema", () => {
       "audit_log",
       "auth_refresh_families",
       "auth_refresh_tokens",
+      "backtest_runs",
       "cloud_accounts",
       "forecast_models",
       "forecast_runs",
