@@ -84,6 +84,17 @@ it("enforces endpoint credential, origin, Fetch Metadata, CSRF, and body selecti
     },
     cookies,
   });
+  const formValid = await harness.app.inject({
+    method: "POST",
+    url: "/api/session-probe",
+    headers: {
+      origin: harness.origin,
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    payload: new URLSearchParams({ _csrf: cookies.ccpo_csrf! }).toString(),
+    cookies,
+  });
   const conflict = await harness.app.inject({
     method: "GET",
     url: "/api/session-probe",
@@ -103,10 +114,11 @@ it("enforces endpoint credential, origin, Fetch Metadata, CSRF, and body selecti
     get.statusCode,
     unsafeMissing.statusCode,
     unsafeValid.statusCode,
+    formValid.statusCode,
     conflict.statusCode,
     refreshBody.statusCode,
     refreshMissing.statusCode,
-  ]).toEqual([200, 403, 200, 401, 400, 401]);
+  ]).toEqual([200, 403, 200, 200, 401, 400, 401]);
   expect(unsafeMissing.json().error.code).toBe("CSRF_INVALID");
   expect(conflict.json().error.code).toBe("AUTH_CREDENTIAL_CONFLICT");
   expect(refreshBody.json().error.code).toBe("VALIDATION_ERROR");

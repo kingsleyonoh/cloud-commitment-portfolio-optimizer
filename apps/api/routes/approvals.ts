@@ -10,6 +10,7 @@ import type {
 } from "../../../core/tenant/protected-users-limiter.js";
 import type { AuthAction } from "../../../core/tenant/rbac.js";
 import type { RequestContext } from "../../../core/tenant/request-context.js";
+import { renderApprovalDetailPage, renderApprovalsPage } from "../../web/approvals-page.js";
 import {
   approvalDecisionBodySchema,
   approvalDetailSchema,
@@ -27,6 +28,8 @@ export interface ApprovalsRuntime {
 }
 
 export function registerApprovalsRoutes(app: FastifyInstance, runtime: ApprovalsRuntime): void {
+  registerApprovalPages(app, runtime);
+
   app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
     "/api/recommendations/:id/request-approval",
     {
@@ -108,6 +111,104 @@ export function registerApprovalsRoutes(app: FastifyInstance, runtime: Approvals
             ),
     );
   }
+}
+
+function registerApprovalPages(app: FastifyInstance, runtime: ApprovalsRuntime): void {
+  registerFormParser(app);
+
+  app.get(
+    "/approvals",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/approvals", "approvals.read"),
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const page = await runtime.service.list(context, { limit: "100" });
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(renderApprovalsPage({ approvals: page.approvals, role: context.role }));
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/approvals/:id",
+    {
+      preHandler: protectedBoundary(app, runtime, "GET", "/api/approvals/{id}", "approvals.read"),
+      schema: { params: approvalPathSchema },
+    },
+    async (request, reply) => {
+      const context = requestContext(request.authContext);
+      const detail = await runtime.service.get(context, request.params.id);
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderApprovalDetailPage({
+            detail,
+            role: context.role,
+            csrfToken: browserCsrfCookie(request.cookies),
+          }),
+        );
+    },
+  );
+
+  for (const decision of ["approve", "reject"] as const) {
+    app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+      `/approvals/:id/${decision}`,
+      {
+        bodyLimit: 8 * 1024,
+        preHandler: protectedBoundary(
+          app,
+          runtime,
+          "POST",
+          `/api/approvals/{id}/${decision}`,
+          "recommendations.approve_reject",
+        ),
+        schema: { params: approvalPathSchema },
+      },
+      async (request, reply) => {
+        const context = requestContext(request.authContext);
+        const decisionBody = { ...(request.body ?? {}) };
+        delete decisionBody._csrf;
+        if (decision === "approve") {
+          await runtime.service.approve(context, request.params.id, decisionBody);
+        } else {
+          await runtime.service.reject(context, request.params.id, decisionBody);
+        }
+        return reply.code(303).header("location", "/approvals").send("");
+      },
+    );
+  }
+}
+
+function registerFormParser(app: FastifyInstance): void {
+  if (app.hasContentTypeParser("application/x-www-form-urlencoded")) return;
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string", bodyLimit: 8 * 1024 },
+    (_request, body, done) => done(null, parseFormBody(body)),
+  );
+}
+
+function parseFormBody(body: string | Buffer): Record<string, unknown> {
+  const raw = Buffer.isBuffer(body) ? body.toString("utf8") : body;
+  const parsed = new URLSearchParams(raw);
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of parsed) {
+    if (Object.hasOwn(result, key)) {
+      result[key] = [result[key], value];
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function browserCsrfCookie(
+  cookies: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return cookies.ccpo_csrf ?? cookies["__Host-ccpo_csrf"];
 }
 
 function protectedBoundary(

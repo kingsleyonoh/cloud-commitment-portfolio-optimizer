@@ -108,7 +108,7 @@ function decorateAuthentication(
     const csrf = cookieCsrf(request.cookies, rawCookie, policy, credential.kind);
     request.authContext = await authentication.authenticate(credential, request.id, {
       method: request.method,
-      headers: request.headers,
+      headers: formCsrfHeaders(request.headers, request.body),
       csrfCookie: csrf,
       expectedOrigin: policy.publicOrigin,
     });
@@ -128,6 +128,23 @@ function cookieCsrf(
     cookies[policy.csrfName],
     "CSRF_INVALID",
   );
+}
+
+function formCsrfHeaders(
+  headers: Readonly<Record<string, string | readonly string[] | undefined>>,
+  body: unknown,
+): Readonly<Record<string, string | readonly string[] | undefined>> {
+  if (headers["x-csrf-token"] !== undefined || !isFormContentType(headers["content-type"])) {
+    return headers;
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return headers;
+  const csrf = (body as { _csrf?: unknown })._csrf;
+  if (typeof csrf !== "string") return headers;
+  return { ...headers, "x-csrf-token": csrf };
+}
+
+function isFormContentType(value: string | readonly string[] | undefined): boolean {
+  return typeof value === "string" && /^application\/x-www-form-urlencoded(?:\s*;|$)/iu.test(value);
 }
 
 function decorateAuthorization(app: FastifyInstance): void {
