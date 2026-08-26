@@ -72,3 +72,9 @@ export type ApprovalInsertInput = Readonly<{
   reason: string | null;
   expiresAt: Date;
 }>;
+
+export type ApprovalExpiryResult = Readonly<{
+  processed: boolean;
+  approvalIds: readonly string[];
+  recommendationIds: readonly string[];
+}>;

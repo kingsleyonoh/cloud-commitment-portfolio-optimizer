@@ -47,6 +47,8 @@ it("starts with an injected ready queue without enqueueing or polling", async ()
   expect(jobQueue.enqueue).not.toHaveBeenCalled();
   expect(workerLogger.info).toHaveBeenCalledTimes(1);
   expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    approval_expiry_processed: false,
+    approval_expiry_count: 0,
     forecast_processed: false,
     forecast_run_id: null,
     forecast_status: null,
@@ -74,6 +76,8 @@ it("processes one forecast run when an injected forecast worker is available", a
 
   expect(forecasts.processNextForecastRun).toHaveBeenCalledTimes(1);
   expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    approval_expiry_processed: false,
+    approval_expiry_count: 0,
     forecast_processed: true,
     forecast_run_id: "forecast-run-1",
     forecast_status: "completed",
@@ -102,11 +106,40 @@ it("processes one optimizer run when an injected optimizer worker is available",
 
   expect(optimizers.processNextOptimizerRun).toHaveBeenCalledTimes(1);
   expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    approval_expiry_processed: false,
+    approval_expiry_count: 0,
     forecast_processed: false,
     forecast_run_id: null,
     forecast_status: null,
     optimizer_processed: true,
     optimizer_run_id: "optimizer-run-1",
     optimizer_status: "completed",
+  });
+});
+
+it("processes expired approvals when an injected approval worker is available", async () => {
+  const jobQueue = queue(true);
+  const workerLogger = logger();
+  const approvals = {
+    processExpiredApprovals: vi.fn(async () => ({
+      processed: true,
+      approvalIds: ["approval-1", "approval-2"],
+      recommendationIds: ["recommendation-1", "recommendation-2"],
+    })),
+  };
+  const worker = buildWorker({ queue: jobQueue, logger: workerLogger, approvals });
+
+  await worker.start();
+
+  expect(approvals.processExpiredApprovals).toHaveBeenCalledTimes(1);
+  expect(workerLogger.info).toHaveBeenCalledWith("worker.ready", {
+    approval_expiry_processed: true,
+    approval_expiry_count: 2,
+    forecast_processed: false,
+    forecast_run_id: null,
+    forecast_status: null,
+    optimizer_processed: false,
+    optimizer_run_id: null,
+    optimizer_status: null,
   });
 });

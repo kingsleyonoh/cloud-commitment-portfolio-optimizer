@@ -4,6 +4,7 @@ import { AppError } from "../shared/errors.js";
 import type { RecommendationRecord } from "../recommendations/recommendations-types.js";
 import type {
   ApprovalDecisionInput,
+  ApprovalExpiryResult,
   ApprovalInsertInput,
   ApprovalListInput,
   ApprovalRecord,
@@ -16,6 +17,7 @@ export interface ApprovalsRepository {
   approve(tenantId: string, input: ApprovalDecisionInput): Promise<ApprovalRecord | null>;
   reject(tenantId: string, input: ApprovalDecisionInput): Promise<ApprovalRecord | null>;
   getRecommendation(tenantId: string, id: string): Promise<RecommendationRecord | null>;
+  expireDue(now: Date, limit: number): Promise<ApprovalExpiryResult>;
 }
 
 interface ApprovalRow extends QueryResultRow {
@@ -99,6 +101,7 @@ export function createApprovalsRepository(pool: Pool): ApprovalsRepository {
     approve: (tenantId, input) => decide(pool, tenantId, input, "approved"),
     reject: (tenantId, input) => decide(pool, tenantId, input, "rejected"),
     getRecommendation: (tenantId, id) => getRecommendation(pool, tenantId, id),
+    expireDue: (now, limit) => expireDue(pool, now, limit),
   };
 }
 
@@ -248,6 +251,54 @@ async function getRecommendation(
     [tenantId, id],
   );
   return result.rows[0] ? freezeRecommendation(result.rows[0]) : null;
+}
+
+async function expireDue(pool: Pool, now: Date, limit: number): Promise<ApprovalExpiryResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<
+      QueryResultRow & { approvalId: string; recommendationId: string }
+    >(
+      `WITH due AS (
+         SELECT id, tenant_id, recommendation_id
+           FROM approvals
+          WHERE status = 'pending'
+            AND expires_at <= $1
+          ORDER BY expires_at ASC, id ASC
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+       ),
+       expired_recommendations AS (
+         UPDATE recommendations rec
+            SET status = 'expired'
+           FROM due
+          WHERE rec.tenant_id = due.tenant_id
+            AND rec.id = due.recommendation_id
+            AND rec.status = 'pending_approval'
+          RETURNING rec.tenant_id, rec.id
+       )
+       UPDATE approvals app
+          SET status = 'expired', decided_at = $1
+         FROM expired_recommendations rec
+        WHERE app.tenant_id = rec.tenant_id
+          AND app.recommendation_id = rec.id
+          AND app.status = 'pending'
+        RETURNING app.id AS "approvalId", app.recommendation_id AS "recommendationId"`,
+      [now.toISOString(), limit],
+    );
+    await client.query("COMMIT");
+    return Object.freeze({
+      processed: result.rows.length > 0,
+      approvalIds: Object.freeze(result.rows.map((row) => String(row.approvalId))),
+      recommendationIds: Object.freeze(result.rows.map((row) => String(row.recommendationId))),
+    });
+  } catch (error) {
+    await rollback(client);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function getRecommendationForUpdate(

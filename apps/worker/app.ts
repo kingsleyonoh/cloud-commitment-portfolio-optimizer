@@ -1,4 +1,5 @@
 import { AppError } from "../../core/shared/errors.js";
+import type { ApprovalExpiryWorker } from "../../core/approvals/approval-expiry-worker.js";
 import type { ForecastWorker } from "../../core/forecasting/forecast-worker.js";
 import type { OptimizerWorker } from "../../core/optimizer-runs/optimizer-worker.js";
 import type { JobQueue } from "../../core/shared/jobQueue.js";
@@ -14,6 +15,7 @@ export interface BuildWorkerOptions {
   logger: Logger;
   forecasts?: ForecastWorker;
   optimizers?: OptimizerWorker;
+  approvals?: ApprovalExpiryWorker;
 }
 
 export function buildWorker(options: BuildWorkerOptions): WorkerApplication {
@@ -38,7 +40,10 @@ async function startWorker(options: BuildWorkerOptions): Promise<void> {
   }
   const forecastResult = await options.forecasts?.processNextForecastRun();
   const optimizerResult = await options.optimizers?.processNextOptimizerRun();
+  const approvalResult = await options.approvals?.processExpiredApprovals();
   await options.logger.info("worker.ready", {
+    approval_expiry_processed: approvalResult?.processed ?? false,
+    approval_expiry_count: approvalResult?.approvalIds.length ?? 0,
     forecast_processed: forecastResult?.processed ?? false,
     forecast_run_id: forecastResult?.processed ? forecastResult.runId : null,
     forecast_status: forecastResult?.processed ? forecastResult.status : null,
