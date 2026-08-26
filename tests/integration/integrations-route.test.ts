@@ -65,4 +65,33 @@ describe("integration adapter routes", () => {
     });
     expect(response.statusCode).toBe(403);
   });
+
+  it("renders disabled and unsupported states without exposing adapter credentials", async () => {
+    harness = await createOptimizerRunsHarness("ccpo_integrations_ui");
+    const headers = optimizerRunsAuthorization(harness);
+    const page = await harness.app.inject({
+      method: "GET",
+      url: "/integrations",
+      headers: { accept: "text/html", ...headers },
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("Optional ecosystem edges");
+    expect(page.body).toContain("Notification Hub");
+    expect(page.body).toContain("unsupported");
+    expect(page.body).toContain('name="target_system"');
+    expect(page.body).not.toMatch(/<script|api[_-]?key|authorization|Bearer|secret/iu);
+
+    const submitted = await harness.app.inject({
+      method: "POST",
+      url: "/integrations/test-event",
+      headers: {
+        accept: "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        ...headers,
+      },
+      payload: new URLSearchParams({ target_system: "workflow_engine" }).toString(),
+    });
+    expect(submitted.statusCode).toBe(303);
+    expect(submitted.headers.location).toBe("/integrations");
+  });
 });

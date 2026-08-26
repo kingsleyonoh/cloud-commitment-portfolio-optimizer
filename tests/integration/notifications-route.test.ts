@@ -134,4 +134,50 @@ describe("local notifications", () => {
     });
     expect(response.statusCode).toBe(403);
   });
+
+  it("renders the notification settings workbench and saves browser preferences", async () => {
+    harness = await createOptimizerRunsHarness("ccpo_notifications_ui");
+    const headers = optimizerRunsAuthorization(harness, "finops_analyst", "finops_analyst");
+    const page = await harness.app.inject({
+      method: "GET",
+      url: "/settings/notifications",
+      headers: { accept: "text/html", ...headers },
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("Notification settings");
+    expect(page.body).toContain('name="event_type"');
+    expect(page.body).toContain("cloud_commitment.approval.requested");
+    expect(page.body).not.toMatch(/<script|api_key|password|authorization|Bearer/iu);
+
+    const saved = await harness.app.inject({
+      method: "POST",
+      url: "/settings/notifications",
+      headers: {
+        accept: "text/html",
+        "content-type": "application/x-www-form-urlencoded",
+        ...headers,
+      },
+      payload: new URLSearchParams({
+        event_type: "cloud_commitment.import.completed",
+        channel: "in_app",
+        urgency: "low",
+        enabled_0: "true",
+      }).toString(),
+    });
+    expect(saved.statusCode).toBe(303);
+    const stored = await harness.pool.query(
+      `SELECT event_type, channel, urgency, enabled
+         FROM notification_preferences
+        WHERE tenant_id = $1 AND user_id = $2`,
+      [harness.tenantA, harness.actors.get("finops_analyst")],
+    );
+    expect(stored.rows).toEqual([
+      {
+        event_type: "cloud_commitment.import.completed",
+        channel: "in_app",
+        urgency: "low",
+        enabled: true,
+      },
+    ]);
+  });
 });

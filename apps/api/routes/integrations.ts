@@ -11,6 +11,7 @@ import type {
   ProtectedUsersRoute,
 } from "../../../core/tenant/protected-users-limiter.js";
 import type { RequestContext } from "../../../core/tenant/request-context.js";
+import { renderIntegrationsPage } from "../../web/integrations-page.js";
 import {
   ecosystemEventSchema,
   integrationTestBodySchema,
@@ -27,6 +28,8 @@ export function registerIntegrationsRoutes(
   app: FastifyInstance,
   runtime: IntegrationsRuntime,
 ): void {
+  registerIntegrationPages(app, runtime);
+
   app.get(
     "/api/integrations/status",
     {
@@ -65,6 +68,99 @@ export function registerIntegrationsRoutes(
       return reply.code(201).send(publicEvent(event));
     },
   );
+}
+
+function registerIntegrationPages(app: FastifyInstance, runtime: IntegrationsRuntime): void {
+  registerFormParser(app);
+  app.get(
+    "/integrations",
+    {
+      preHandler: boundary(
+        app,
+        runtime,
+        "GET",
+        "/api/integrations/status",
+        "ecosystem_adapters.configure",
+      ),
+    },
+    async (request, reply) => {
+      const user = userContext(request.authContext);
+      return reply
+        .code(200)
+        .type("text/html; charset=utf-8")
+        .send(
+          renderIntegrationsPage({
+            integrations: runtime.service.statuses(),
+            role: user.role,
+            csrfToken: browserCsrfCookie(request.cookies),
+          }),
+        );
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    "/integrations/test-event",
+    {
+      bodyLimit: 8 * 1024,
+      preHandler: boundary(
+        app,
+        runtime,
+        "POST",
+        "/api/integrations/test-event",
+        "ecosystem_adapters.configure",
+      ),
+    },
+    async (request, reply) => {
+      const user = userContext(request.authContext);
+      await runtime.service.testEvent(user.tenantId, parseIntegrationForm(request.body));
+      return reply.code(303).header("location", "/integrations").send("");
+    },
+  );
+}
+
+function registerFormParser(app: FastifyInstance): void {
+  if (app.hasContentTypeParser("application/x-www-form-urlencoded")) return;
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string", bodyLimit: 8 * 1024 },
+    (_request, body, done) => done(null, parseFormBody(body)),
+  );
+}
+
+function parseFormBody(body: string | Buffer): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of new URLSearchParams(
+    Buffer.isBuffer(body) ? body.toString("utf8") : body,
+  )) {
+    result[key] = value;
+  }
+  return result;
+}
+
+function parseIntegrationForm(body: unknown): EcosystemTarget {
+  const target =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as { target_system?: unknown }).target_system
+      : undefined;
+  if (
+    target !== "notification_hub" &&
+    target !== "workflow_engine" &&
+    target !== "invoice_reconciliation_engine"
+  ) {
+    throw new AppError({
+      code: "VALIDATION_ERROR",
+      message: "The integration target is invalid.",
+      statusCode: 400,
+      details: [],
+    });
+  }
+  return target;
+}
+
+function browserCsrfCookie(
+  cookies: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return cookies.ccpo_csrf ?? cookies["__Host-ccpo_csrf"];
 }
 
 function boundary(
