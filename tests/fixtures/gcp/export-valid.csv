@@ -1,0 +1,2 @@
+provider,service_code,sku,region,usage_start,usage_end,usage_quantity,usage_unit,on_demand_cost_cents,realized_cost_cents,commitment_applied_cents,tags
+gcp,Compute Engine,n2-standard-4,us-central1,2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,4.00000000,Hrs,320,224,96,"{""environment"":""prod""}"

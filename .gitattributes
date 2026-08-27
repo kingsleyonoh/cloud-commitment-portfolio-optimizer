@@ -1,0 +1,17 @@
+* text=auto
+
+*.css text eol=lf
+*.csv text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.mjs text eol=lf
+*.sql text eol=lf
+*.ts text eol=lf
+*.yml text eol=lf
+*.zig text eol=lf
+
+.env.example text eol=lf
+tests/fixtures/economic_kernel/*.json text eol=lf
+tests/fixtures/economic_kernel/*.ndjson text eol=lf

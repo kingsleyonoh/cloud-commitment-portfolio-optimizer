@@ -1,0 +1,19 @@
+{
+  "schema_version": "canonical_usage_snapshot:v1",
+  "rows": [
+    {
+      "provider": "gcp",
+      "service_code": "Compute Engine",
+      "sku": "n2-standard-4",
+      "region": "us-central1",
+      "usage_start": "2026-05-01T00:00:00Z",
+      "usage_end": "2026-05-01T01:00:00Z",
+      "usage_quantity": "4.00000000",
+      "usage_unit": "Hrs",
+      "on_demand_cost_cents": "320",
+      "realized_cost_cents": "224",
+      "commitment_applied_cents": "96",
+      "tags": { "environment": "prod" }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": "canonical_usage_snapshot:v1",
+  "rows": [
+    {
+      "provider": "azure",
+      "service_code": "Microsoft.Compute",
+      "sku": "Standard_D4s_v5",
+      "region": "eastus",
+      "usage_start": "2026-05-01T00:00:00Z",
+      "usage_end": "2026-05-01T01:00:00Z",
+      "usage_quantity": "3.00000000",
+      "usage_unit": "Hrs",
+      "on_demand_cost_cents": "240",
+      "realized_cost_cents": "180",
+      "commitment_applied_cents": "60",
+      "tags": { "environment": "prod" }
+    }
+  ]
+}

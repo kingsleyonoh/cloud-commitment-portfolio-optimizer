@@ -1,0 +1,2 @@
+provider,service_code,sku,region,usage_start,usage_end,usage_quantity,usage_unit,on_demand_cost_cents,realized_cost_cents,commitment_applied_cents,tags,note
+aws,AmazonEC2,c7g.large,us-west-2,2026-02-01T00:00:00Z,2026-02-01T01:00:00Z,1.00000000,Hrs,20,15,10,"{""environment"":""synthetic""}",ignored optional note

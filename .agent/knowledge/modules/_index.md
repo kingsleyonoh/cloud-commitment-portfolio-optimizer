@@ -6,7 +6,11 @@
 
 | File | Summary |
 |------|---------|
-| `EXAMPLE.md` | Template showing the expected shape — delete once a real module exists. |
+| `EXAMPLE.md` | Template showing the expected shape for future module entries. |
+| `core-config.md` | Phase 0 typed environment/configuration and deployment-boundary module. |
+| `core-db.md` | Deterministic SQL migration/setup command and accepted product plan through `0020`. |
+| `core-shared.md` | Phase 0 managed shared-resource primitives. |
+| `tests-e2e.md` | Phase 0 deterministic HTTP/browser process harness. |
 
 ## How to add a new module
 

@@ -6,7 +6,8 @@
 
 | File | Summary |
 |------|---------|
-| `EXAMPLE.md` | Template showing the expected shape — delete once a real gotcha exists. |
+| `2026-07-22-retry-after-is-remaining-delay.md` | Use a controllable clock for exact remaining-delay Retry-After assertions. |
+| `2026-07-22-e2e-readiness-must-observe-child-lifecycle.md` | Bound readiness across HTTP health, child exit/error, and exact cleanup. |
 
 ## How to add a new gotcha
 

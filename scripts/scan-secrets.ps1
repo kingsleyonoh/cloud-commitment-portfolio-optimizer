@@ -66,6 +66,7 @@ $secretPatterns = @(
 # A line that matches a $secretPatterns regex but ALSO contains an allow-list
 # pattern is treated as a placeholder, not a real secret.
 $allowListPatterns = @(
+    '(?i)postgres(ql)?://user:(pass|password)@(localhost|127\.0\.0\.1)(:\d+)?/', # explicit local placeholder URL
     '\$\{[A-Z_][A-Z0-9_]*\}',                     # ${VAR}
     '\$\{\{[^}]+\}\}',                            # ${{ VAR }} (GitHub Actions)
     '\{\{[A-Z_][A-Z0-9_]*\}\}',                   # {{TOKEN}} (template placeholders)

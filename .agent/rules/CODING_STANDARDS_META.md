@@ -38,8 +38,8 @@ You have a vast library of specialized skills available. **Use them proactively*
 - **Always announce:** *"Using skill: [skill-name] for this task."* so the user knows which patterns are being applied.
 - If no skill matches, proceed normally.
 
-### YOLO Inbox Feedback Channel (read-only contract)
-If the user asks you to write to `docs/yolo-inbox.md` — common phrasings: *"add an inbox entry"*, *"drop a YOLO inbox note"*, *"tell YOLO that..."*, *"feedback for the running YOLO"*, *"write inbox: [concern]"*, or `/yolo-feedback [concern]` — follow `.agent/workflows/yolo-feedback.md` exactly. That workflow is **read-only**: you may inspect any file (including `.yolo/` state if YOLO is running) and run read-only git commands, but you write to **exactly one path** — `docs/yolo-inbox.md` — and only by appending an entry under `## Pending`. Do NOT edit source, do NOT touch progress.md or `.yolo/`, do NOT run `git add`/`commit`, do NOT invoke other workflows. The running YOLO master picks the entry up at the next batch boundary and commits the inbox-file change as part of the batch that handles it.
+### Coordination Inbox Feedback Channel (read-only contract)
+If the user asks you to write to `docs/yolo-inbox.md`—for example, *"add an inbox entry"*, *"write inbox: [concern]"*, or `/yolo-feedback [concern]`—follow `.agent/workflows/yolo-feedback.md` exactly. That workflow is **read-only**: inspect only what is needed and write to **exactly one path**, `docs/yolo-inbox.md`, by appending under `## Pending`. Do not edit source, `docs/progress.md`, or `.yolo/`; do not stage or commit; do not invoke other workflows. Ordinary AI/Mesh/user coordination may consume the note when relevant. Runtime v2 does not consume or semantically accept this ledger.
 
 ## PowerShell Environment
 - **ALWAYS activate the virtual environment before ANY `python` or `pip` command:**

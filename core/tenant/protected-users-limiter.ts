@@ -1,0 +1,268 @@
+import { createHash } from "node:crypto";
+
+import { AppError } from "../shared/errors.js";
+import { createManagedCache } from "../shared/lifecycle.js";
+import {
+  createLocalRollingWindowLimiter,
+  createRedisRollingWindowLimiter,
+  type RollingWindowDecision,
+} from "../shared/rolling-window-limiter.js";
+import type { RequestContext } from "./request-context.js";
+
+export const USERS_LIMIT_WINDOW_MS = 60_000;
+export const USERS_LIST_LIMIT = 60;
+export const USERS_MUTATION_LIMIT = 30;
+export const API_KEY_ROTATION_LIMIT = 5;
+export const PASSWORD_PROVISION_LIMIT = 5;
+export const CLOUD_ACCOUNTS_LIST_LIMIT = 120;
+export const CLOUD_ACCOUNTS_MUTATION_LIMIT = 60;
+export const CLOUD_ACCOUNTS_DEACTIVATE_LIMIT = 20;
+export const IMPORTS_LIST_LIMIT = 120;
+export const IMPORTS_CREATE_LIMIT = 20;
+export const PRICE_TABLES_LIST_LIMIT = 120;
+export const PRICE_TABLES_MUTATION_LIMIT = 20;
+export const FORECAST_LIST_LIMIT = 120;
+export const FORECAST_MODEL_MUTATION_LIMIT = 60;
+export const FORECAST_RUN_MUTATION_LIMIT = 30;
+export const OPTIMIZER_POLICIES_LIST_LIMIT = 120;
+export const OPTIMIZER_POLICIES_MUTATION_LIMIT = 30;
+export const OPTIMIZER_RUNS_LIST_LIMIT = 120;
+export const OPTIMIZER_RUNS_MUTATION_LIMIT = 20;
+export const RECOMMENDATIONS_LIST_LIMIT = 120;
+export const APPROVALS_LIST_LIMIT = 120;
+export const APPROVALS_MUTATION_LIMIT = 30;
+export const REPORTS_LIST_LIMIT = 120;
+export const BACKTESTS_LIST_LIMIT = 120;
+export const BACKTESTS_MUTATION_LIMIT = 10;
+export const NOTIFICATIONS_LIST_LIMIT = 120;
+export const NOTIFICATIONS_MUTATION_LIMIT = 60;
+export const NOTIFICATION_PREFERENCES_LIST_LIMIT = 60;
+export const NOTIFICATION_PREFERENCES_MUTATION_LIMIT = 30;
+export const INTEGRATION_STATUS_LIMIT = 60;
+export const INTEGRATION_TEST_LIMIT = 10;
+export const SCENARIOS_LIST_LIMIT = 120;
+export const SCENARIOS_MUTATION_LIMIT = 60;
+export const AUDIT_LOG_LIST_LIMIT = 60;
+
+export type ProtectedUsersMethod = "GET" | "POST" | "PATCH" | "PUT";
+export type ProtectedUsersRoute =
+  | "/api/users"
+  | "/api/users/{id}"
+  | "/api/users/{id}/credentials/password"
+  | "/api/api-keys"
+  | "/api/api-keys/rotate"
+  | "/api/cloud-accounts"
+  | "/api/cloud-accounts/{id}"
+  | "/api/cloud-accounts/{id}/deactivate"
+  | "/api/imports"
+  | "/api/imports/{id}"
+  | "/api/price-tables"
+  | "/api/price-tables/{id}/activate"
+  | "/api/forecast-models"
+  | "/api/forecast-runs"
+  | "/api/forecast-runs/{id}"
+  | "/api/optimizer-policies"
+  | "/api/optimizer-policies/{id}"
+  | "/api/optimizer-runs"
+  | "/api/optimizer-runs/{id}"
+  | "/api/recommendations"
+  | "/api/recommendations/{id}"
+  | "/api/recommendations/{id}/request-approval"
+  | "/api/approvals"
+  | "/api/approvals/{id}"
+  | "/api/approvals/{id}/approve"
+  | "/api/approvals/{id}/reject"
+  | "/api/backtests"
+  | "/api/backtests/{id}"
+  | "/api/reports/{source_type}/{source_id}"
+  | "/api/notifications"
+  | "/api/notifications/{id}/read"
+  | "/api/settings/notifications"
+  | "/api/integrations/status"
+  | "/api/integrations/test-event"
+  | "/api/scenarios"
+  | "/api/scenarios/{id}"
+  | "/api/audit-log";
+export type ProtectedUsersLimitDecision = RollingWindowDecision;
+
+export interface ProtectedUsersLimiter {
+  readonly mode: "local" | "redis" | "trusted_edge";
+  admit(
+    context: RequestContext,
+    method: ProtectedUsersMethod,
+    route: ProtectedUsersRoute,
+    targetId?: string,
+  ): Promise<ProtectedUsersLimitDecision>;
+  close?(): Promise<void>;
+}
+
+export interface LocalProtectedUsersLimiterOptions {
+  clock?: () => number;
+}
+
+export interface RedisProtectedUsersLimiterOptions {
+  url: string;
+  keyPrefix?: string;
+}
+
+export interface ProtectedUsersLimiterConfig {
+  mode: ProtectedUsersLimiter["mode"];
+  redisUrl: string;
+}
+
+export function protectedUsersBucketDigest(
+  context: RequestContext,
+  method: ProtectedUsersMethod,
+  route: ProtectedUsersRoute,
+  targetId?: string,
+): string {
+  const actorId = context.actorUserId ?? context.apiKeyId;
+  const digest = createHash("sha256")
+    .update("protected-route-limit:v2\0", "utf8")
+    .update(context.tenantId, "utf8")
+    .update("\0", "utf8")
+    .update(actorId ?? "anonymous", "utf8")
+    .update("\0", "utf8")
+    .update(route, "utf8")
+    .update("\0", "utf8")
+    .update(method, "utf8");
+  if (targetId) digest.update("\0target\0", "utf8").update(targetId, "utf8");
+  return digest.digest("hex");
+}
+
+export function createLocalProtectedUsersLimiter(
+  options: LocalProtectedUsersLimiterOptions = {},
+): ProtectedUsersLimiter {
+  const rolling = createLocalRollingWindowLimiter({
+    ...(options.clock ? { clock: options.clock } : {}),
+    unavailable,
+  });
+  return protectedLimiter("local", rolling.admit, rolling.close);
+}
+
+export async function createRedisProtectedUsersLimiter(
+  options: RedisProtectedUsersLimiterOptions,
+): Promise<ProtectedUsersLimiter> {
+  const rolling = await createRedisRollingWindowLimiter({
+    url: options.url,
+    keyPrefix: options.keyPrefix ?? "ccpo:protected-route-limit:v2:",
+    unavailable,
+  });
+  return protectedLimiter("redis", rolling.admit, rolling.close);
+}
+
+export function createTrustedEdgeProtectedUsersLimiter(): ProtectedUsersLimiter {
+  return {
+    mode: "trusted_edge",
+    async admit() {
+      return { allowed: true };
+    },
+  };
+}
+
+function protectedLimiter(
+  mode: "local" | "redis",
+  admit: (key: string, limit: number, windowMs: number) => Promise<RollingWindowDecision>,
+  close: () => Promise<void>,
+): ProtectedUsersLimiter {
+  return {
+    mode,
+    async admit(context, method, route, targetId) {
+      return admit(
+        protectedUsersBucketDigest(context, method, route, targetId),
+        protectedRouteLimit(method, route),
+        USERS_LIMIT_WINDOW_MS,
+      );
+    },
+    close,
+  };
+}
+
+function protectedRouteLimit(method: ProtectedUsersMethod, route: ProtectedUsersRoute): number {
+  if (method === "POST" && route === "/api/api-keys/rotate") return API_KEY_ROTATION_LIMIT;
+  if (method === "POST" && route === "/api/cloud-accounts/{id}/deactivate") {
+    return CLOUD_ACCOUNTS_DEACTIVATE_LIMIT;
+  }
+  if (route.startsWith("/api/cloud-accounts")) {
+    return method === "GET" ? CLOUD_ACCOUNTS_LIST_LIMIT : CLOUD_ACCOUNTS_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/imports")) {
+    return method === "GET" ? IMPORTS_LIST_LIMIT : IMPORTS_CREATE_LIMIT;
+  }
+  if (route.startsWith("/api/price-tables")) {
+    return method === "GET" ? PRICE_TABLES_LIST_LIMIT : PRICE_TABLES_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/forecast-models")) {
+    return method === "GET" ? FORECAST_LIST_LIMIT : FORECAST_MODEL_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/forecast-runs")) {
+    return method === "GET" ? FORECAST_LIST_LIMIT : FORECAST_RUN_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/optimizer-policies")) {
+    return method === "GET" ? OPTIMIZER_POLICIES_LIST_LIMIT : OPTIMIZER_POLICIES_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/optimizer-runs")) {
+    return method === "GET" ? OPTIMIZER_RUNS_LIST_LIMIT : OPTIMIZER_RUNS_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/approvals")) {
+    return method === "GET" ? APPROVALS_LIST_LIMIT : APPROVALS_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/backtests")) {
+    return method === "GET" ? BACKTESTS_LIST_LIMIT : BACKTESTS_MUTATION_LIMIT;
+  }
+  if (route === "/api/settings/notifications") {
+    return method === "GET"
+      ? NOTIFICATION_PREFERENCES_LIST_LIMIT
+      : NOTIFICATION_PREFERENCES_MUTATION_LIMIT;
+  }
+  if (route.startsWith("/api/notifications")) {
+    return method === "GET" ? NOTIFICATIONS_LIST_LIMIT : NOTIFICATIONS_MUTATION_LIMIT;
+  }
+  if (route === "/api/integrations/status") return INTEGRATION_STATUS_LIMIT;
+  if (route === "/api/integrations/test-event") return INTEGRATION_TEST_LIMIT;
+  if (route.startsWith("/api/scenarios")) {
+    return method === "GET" ? SCENARIOS_LIST_LIMIT : SCENARIOS_MUTATION_LIMIT;
+  }
+  if (route === "/api/audit-log") return AUDIT_LOG_LIST_LIMIT;
+  if (route.startsWith("/api/recommendations")) return RECOMMENDATIONS_LIST_LIMIT;
+  if (route.startsWith("/api/reports")) return REPORTS_LIST_LIMIT;
+  if (method === "PUT" && route === "/api/users/{id}/credentials/password") {
+    return PASSWORD_PROVISION_LIMIT;
+  }
+  return method === "GET" ? USERS_LIST_LIMIT : USERS_MUTATION_LIMIT;
+}
+
+function unavailable(): AppError {
+  return new AppError({
+    code: "PROTECTED_RATE_LIMIT_DEPENDENCY_UNAVAILABLE",
+    message: "Protected request limiting is temporarily unavailable.",
+    statusCode: 503,
+    details: [],
+  });
+}
+
+let configured: ProtectedUsersLimiterConfig | undefined;
+const limiterCache = createManagedCache(
+  async () => {
+    if (!configured) throw unavailable();
+    if (configured.mode === "local") return createLocalProtectedUsersLimiter();
+    if (configured.mode === "trusted_edge") return createTrustedEdgeProtectedUsersLimiter();
+    return createRedisProtectedUsersLimiter({ url: configured.redisUrl });
+  },
+  async (limiter) => limiter.close?.(),
+);
+
+export function getProtectedUsersLimiter(
+  config: ProtectedUsersLimiterConfig,
+): Promise<ProtectedUsersLimiter> {
+  configured ??= { ...config };
+  return limiterCache.get();
+}
+
+export async function closeProtectedUsersLimiter(): Promise<void> {
+  try {
+    await limiterCache.close();
+  } finally {
+    configured = undefined;
+  }
+}

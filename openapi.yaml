@@ -4,304 +4,1901 @@ info:
   version: 0.1.0
 servers:
   - url: http://localhost:8080
+components:
+  securitySchemes:
+    JwtBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    AnalystApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    AccessCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_access
+      description: Production HttpOnly RS256 access cookie. Loopback development/test uses ccpo_access.
+    RefreshCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_refresh
+      description: Production HttpOnly opaque refresh cookie. Loopback development/test uses ccpo_refresh.
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-ccpo_csrf
+      description: Production readable session-bound CSRF cookie. Loopback development/test uses ccpo_csrf.
+  headers:
+    RequestId:
+      description: Server-generated request correlation identifier.
+      schema: { type: string }
+    NoStore:
+      description: Prevents storage of sensitive or tenant-scoped responses.
+      schema: { type: string, const: no-store }
+    RetryAfter:
+      description: Whole seconds before another attempt.
+      schema: { type: string, pattern: "^[1-9][0-9]*$" }
+    SetCookie:
+      description: Exact Secure/Strict/Path=/ host cookie in production or explicit non-Secure loopback variant. Values are never documented or logged.
+      schema: { type: string, writeOnly: true }
+  schemas:
+    TenantRegistrationAddress:
+      type: object
+      additionalProperties: false
+      properties:
+        line1: { type: string, maxLength: 200 }
+        line2: { type: string, maxLength: 200 }
+        locality: { type: string, maxLength: 100 }
+        region: { type: string, maxLength: 100 }
+        postal_code: { type: string, maxLength: 32 }
+        country_code: { type: string, pattern: "^[A-Za-z]{2}$" }
+    TenantRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 200 }
+        legal_name: { type: string, maxLength: 200 }
+        full_legal_name: { type: string, maxLength: 200 }
+        display_name: { type: string, maxLength: 200 }
+        address: { $ref: "#/components/schemas/TenantRegistrationAddress" }
+        registration:
+          type: object
+          maxProperties: 32
+          additionalProperties: { type: string, maxLength: 256 }
+        contact_email: { type: string, maxLength: 254 }
+        contact_phone: { type: string, maxLength: 64 }
+        support_url: { type: string, format: uri, maxLength: 2048 }
+        finance_owner_email: { type: string, maxLength: 254 }
+        wordmark: { type: string, maxLength: 256 }
+        default_currency: { type: string, pattern: "^[A-Za-z]{3}$" }
+        timezone: { type: string, maxLength: 64 }
+        risk_budget_cents:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)$"
+          x-maximum: "9223372036854775807"
+    TenantProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - legal_name
+        - full_legal_name
+        - display_name
+        - address
+        - registration
+        - contact_email
+        - contact_phone
+        - support_url
+        - finance_owner_email
+        - wordmark
+        - default_currency
+        - timezone
+        - risk_budget_cents
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        legal_name: { type: string }
+        full_legal_name: { type: string }
+        display_name: { type: string }
+        address: { $ref: "#/components/schemas/TenantRegistrationAddress" }
+        registration: { type: object, additionalProperties: { type: string } }
+        contact_email: { type: [string, "null"] }
+        contact_phone: { type: [string, "null"] }
+        support_url: { type: [string, "null"] }
+        finance_owner_email: { type: [string, "null"] }
+        wordmark: { type: [string, "null"] }
+        default_currency: { type: string, pattern: "^[A-Z]{3}$" }
+        timezone: { type: string }
+        risk_budget_cents:
+          type: string
+          pattern: "^(0|[1-9][0-9]*)$"
+          x-maximum: "9223372036854775807"
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TenantRegistrationCreated:
+      type: object
+      additionalProperties: false
+      required: [tenant, apiKey]
+      properties:
+        tenant: { $ref: "#/components/schemas/TenantProfile" }
+        apiKey:
+          type: string
+          description: Plaintext analyst automation credential returned once after commit.
+    RegistrationError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  tenant_id: { type: string, format: uuid }
+                  api_key_id: { type: string, format: uuid }
+    TenantProfileError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    ApiKeyMetadata:
+      type: object
+      additionalProperties: false
+      required: [id, note, created_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        note: { type: [string, "null"] }
+        created_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        revoked_at:
+          type: [string, "null"]
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+    ApiKeyMetadataListResponse:
+      type: object
+      additionalProperties: false
+      required: [api_keys, next_cursor]
+      properties:
+        api_keys:
+          type: array
+          items: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        next_cursor: { type: [string, "null"], maxLength: 512 }
+    ApiKeyMetadataError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    UserRole:
+      type: string
+      enum: [tenant_admin, finops_analyst, finance_approver, read_only_auditor]
+    TenantUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, name, role, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean }
+        created_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        updated_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+    UserListResponse:
+      type: object
+      additionalProperties: false
+      required: [users, next_cursor]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/TenantUser" }
+        next_cursor: { type: [string, "null"], maxLength: 512 }
+    UserCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [email, name, role]
+      properties:
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean, default: true }
+    UserPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_updated_at]
+      anyOf:
+        - required: [email]
+        - required: [name]
+        - required: [role]
+        - required: [is_active]
+      properties:
+        expected_updated_at:
+          type: string
+          format: date-time
+          pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+        email: { type: string, maxLength: 254 }
+        name: { type: string, maxLength: 200 }
+        role: { $ref: "#/components/schemas/UserRole" }
+        is_active: { type: boolean }
+    UserPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          writeOnly: true
+          description: Unicode password normalized to NFC without trimming or truncation; 15..128 scalars and at most 512 UTF-8 bytes.
+    UserError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    AuthLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, email, password]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        email: { type: string, maxLength: 254 }
+        password:
+          type: string
+          writeOnly: true
+          description: NFC-normalized without trim; 15..128 Unicode scalars and at most 512 UTF-8 bytes.
+    AuthSessionMetadata:
+      type: object
+      additionalProperties: false
+      required: [user_id, tenant_id, role, access_expires_at, refresh_idle_expires_at, refresh_absolute_expires_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/UserRole" }
+        access_expires_at: { type: string, format: date-time }
+        refresh_idle_expires_at: { type: string, format: date-time }
+        refresh_absolute_expires_at: { type: string, format: date-time }
+    AuthSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [session]
+      properties:
+        session: { $ref: "#/components/schemas/AuthSessionMetadata" }
+    AuthSessionError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    ApiKeyRotationRequest:
+      type: object
+      additionalProperties: false
+      required: [api_key_id]
+      properties:
+        api_key_id: { type: string, format: uuid }
+        note:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: NFC-normalized, already outer-trimmed, nonblank, and C0/C1-control-free replacement note.
+    ApiKeyRotationResponse:
+      type: object
+      additionalProperties: false
+      required: [revoked_api_key, replacement_api_key, audit_id, apiKey]
+      properties:
+        revoked_api_key: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        replacement_api_key: { $ref: "#/components/schemas/ApiKeyMetadata" }
+        audit_id: { type: string, format: uuid }
+        apiKey:
+          type: string
+          writeOnly: true
+          description: One-time plaintext returned only after the atomic transaction commits.
+    ApiKeyRotationError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, maxItems: 0 }
+    JsonObject:
+      type: object
+      additionalProperties: true
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: array, items: { type: object, additionalProperties: true } }
+    CloudAccount:
+      type: object
+      additionalProperties: false
+      required: [id, provider, external_ref, display_name, currency, tags, is_active, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [aws, azure, gcp] }
+        external_ref: { type: string }
+        display_name: { type: string }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        tags: { type: object, additionalProperties: true }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ImportBatch:
+      type: object
+      additionalProperties: true
+      required: [id, source, format, status, object_uri, schema_version, line_count, error_details, parser_warnings]
+      properties:
+        id: { type: string, format: uuid }
+        cloud_account_id: { type: [string, "null"], format: uuid }
+        source: { type: string, enum: [synthetic, aws_cur, azure_export, gcp_export] }
+        format: { type: string, enum: [csv, parquet, json_api_snapshot, manual_override, native_cur] }
+        status: { type: string, enum: [queued, processing, completed, failed, quarantined, cancelled] }
+        object_uri: { type: string }
+        schema_version: { type: string }
+        line_count: { type: string }
+        error_details: { type: object, additionalProperties: true }
+        parser_warnings: { type: array, items: { type: object, additionalProperties: true } }
+    PriceTable:
+      type: object
+      additionalProperties: true
+      required: [id, provider, instrument, version_label, effective_from, effective_to, source_uri, status, checksum, item_count, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [aws, azure, gcp] }
+        instrument: { type: string }
+        version_label: { type: string }
+        effective_from: { type: string, format: date }
+        effective_to: { type: [string, "null"], format: date }
+        source_uri: { type: string }
+        status: { type: string, enum: [draft, active, superseded, blocked] }
+        checksum: { type: string }
+        item_count: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ForecastModel:
+      type: object
+      additionalProperties: true
+      required: [id, name, provider_scope, service_scope, horizon_months, method, config, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        provider_scope: { type: array, items: { type: string } }
+        service_scope: { type: array, items: { type: string } }
+        horizon_months: { type: integer }
+        method: { type: string, const: seasonal_naive }
+        config: { type: object, additionalProperties: true }
+        status: { type: string, enum: [draft, active, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ForecastRun:
+      type: object
+      additionalProperties: true
+      required: [id, forecast_model_id, status, input_window_start, input_window_end, horizon_months, random_seed, output_uri, quality_metrics, error_details, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        forecast_model_id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, completed, failed, cancelled] }
+        input_window_start: { type: string, format: date }
+        input_window_end: { type: string, format: date }
+        horizon_months: { type: integer }
+        random_seed: { type: string }
+        output_uri: { type: [string, "null"] }
+        quality_metrics: { type: object, additionalProperties: true }
+        error_details: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Scenario:
+      type: object
+      additionalProperties: true
+      required: [id, name, description, base_forecast_run_id, shock_config, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        base_forecast_run_id: { type: [string, "null"], format: uuid }
+        shock_config: { type: object, additionalProperties: true }
+        status: { type: string, enum: [draft, ready, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OptimizerPolicy:
+      type: object
+      additionalProperties: true
+      required: [id, name, objective, max_downside_loss_cents, min_expected_savings_cents, max_utilization_gap_pct, approval_threshold_cents, allowed_instruments, config, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        objective: { type: string, enum: [maximize_expected_savings, minimize_downside_loss, efficient_frontier] }
+        max_downside_loss_cents: { type: string }
+        min_expected_savings_cents: { type: string }
+        max_utilization_gap_pct: { type: string }
+        approval_threshold_cents: { type: string }
+        allowed_instruments: { type: array, items: { type: string } }
+        config: { type: object, additionalProperties: true }
+        status: { type: string, enum: [draft, active, archived] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OptimizerRun:
+      type: object
+      additionalProperties: true
+      required: [id, forecast_run_id, optimizer_policy_id, provider, instrument, price_table_version_ids, status, random_seed, input_snapshot_uri, output_uri, frontier_uri, infeasibility_details, error_details, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        forecast_run_id: { type: string, format: uuid }
+        scenario_id: { type: [string, "null"], format: uuid }
+        optimizer_policy_id: { type: string, format: uuid }
+        provider: { type: string, enum: [aws, azure, gcp] }
+        instrument: { type: string }
+        price_table_version_ids: { type: array, items: { type: string, format: uuid } }
+        status: { type: string, enum: [queued, running, completed, failed, infeasible, cancelled] }
+        random_seed: { type: string }
+        input_snapshot_uri: { type: string }
+        output_uri: { type: [string, "null"] }
+        frontier_uri: { type: [string, "null"] }
+        infeasibility_details: { type: object, additionalProperties: true }
+        error_details: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RecommendationDetail:
+      type: object
+      additionalProperties: true
+      required: [recommendation, report_summary]
+      properties:
+        recommendation: { $ref: "#/components/schemas/JsonObject" }
+        report_summary: { type: [object, "null"], additionalProperties: true }
+    ApprovalDetail:
+      type: object
+      additionalProperties: true
+      required: [approval, recommendation]
+      properties:
+        approval: { $ref: "#/components/schemas/JsonObject" }
+        recommendation: { $ref: "#/components/schemas/JsonObject" }
+    BacktestRun:
+      type: object
+      additionalProperties: true
+      required: [id, name, policy_id, baseline, window_start, window_end, status, input_snapshot_uri, output_uri, metrics, error_details, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        policy_id: { type: string, format: uuid }
+        baseline: { type: string, enum: [no_commitment, last_month_steady_state, seventy_percent_utilization, custom] }
+        window_start: { type: string, format: date }
+        window_end: { type: string, format: date }
+        status: { type: string, enum: [queued, running, completed, failed, cancelled] }
+        input_snapshot_uri: { type: string }
+        output_uri: { type: [string, "null"] }
+        metrics: { type: object, additionalProperties: true }
+        error_details: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Notification:
+      type: object
+      additionalProperties: true
+      required: [id, event_type, source_type, source_id, template_id, urgency, title, body, payload, status, read_at, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        event_type: { type: string }
+        source_type: { type: string }
+        source_id: { type: [string, "null"], format: uuid }
+        template_id: { type: string }
+        urgency: { type: string, enum: [low, medium, high] }
+        title: { type: string }
+        body: { type: string }
+        payload: { type: object, additionalProperties: true }
+        status: { type: string, enum: [unread, read, archived, dismissed] }
+        read_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    JsonBody:
+      type: object
+      additionalProperties: true
+  responses:
+    Error400:
+      description: Request validation failed.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error401:
+      description: Authentication is missing or invalid.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error403:
+      description: The authenticated actor is not allowed to use this resource.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error404:
+      description: The resource is not visible to this tenant.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error409:
+      description: The requested state transition conflicts with current state.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error413:
+      description: The request body exceeds the endpoint limit.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error429:
+      description: The actor exceeded the tenant-scoped rolling limit.
+      headers: { Retry-After: { $ref: "#/components/headers/RetryAfter" } }
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+    Error503:
+      description: A required local dependency is unavailable.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } }
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum page size. The route enforces its resource-specific upper bound.
+      schema: { type: string, pattern: "^[1-9][0-9]{0,2}$", default: "50" }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque tenant-scoped cursor returned by the previous page.
+      schema: { type: string, minLength: 1, maxLength: 512 }
 paths:
+  /api/auth/login:
+    post:
+      operationId: createBrowserSession
+      summary: Prove one tenant-local password and create a cookie-only session
+      description: Credential headers are forbidden; stale cookies are ignored. Redis atomically admits account and immediate-peer-derived IP buckets before exactly one bounded Argon2id verification.
+      security: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuthLoginRequest" }
+      responses:
+        "200":
+          description: Exact non-secret session metadata after family, root token, and audit commit; three cookie values are transport-only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSessionResponse" }
+        "400": { description: Closed JSON, media, password, or field validation failed., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Generic invalid proof or forbidden credential-header conflict., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin checks failed or valid proof found inactive user or tenant., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Encoded body exceeds 4096 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "429":
+          description: Atomic account or canonical-IP rolling bucket denied admission.
+          headers: { Retry-After: { $ref: "#/components/headers/RetryAfter" } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } }
+        "503": { description: Redis, Argon worker, PostgreSQL, audit, or signing dependency unavailable., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+  /api/auth/refresh:
+    post:
+      operationId: rotateBrowserSession
+      summary: Rotate the current opaque refresh token in its stable family
+      description: No decoded body or credential headers. The IP bucket runs before lookup and the confirmed-family bucket before the family-lock transaction. Routine success writes no audit.
+      security:
+        - RefreshCookie: []
+          CsrfCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      responses:
+        "200":
+          description: Exact non-secret session metadata after current-token use and one child commit; three rotated cookie values are transport-only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSessionResponse" }
+        "400": { description: A decoded non-empty body is forbidden., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Missing proof or generic malformed unknown expired used or revoked refresh., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin or CSRF failed or valid proof found inactive user or tenant., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Transport body exceeds 1024 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "429":
+          description: Canonical-IP or confirmed-family rolling bucket denied admission.
+          headers: { Retry-After: { $ref: "#/components/headers/RetryAfter" } }
+          content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } }
+        "503": { description: Redis PostgreSQL audit or signing dependency unavailable., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+  /api/auth/logout:
+    post:
+      operationId: revokeBrowserSession
+      summary: Idempotently clear cookies and revoke a known stable family
+      description: No decoded body or credential headers. Missing malformed unknown or already-revoked refresh state remains audit-free 204; a known unrevoked family commits one logout audit before 204.
+      security:
+        - {}
+        - RefreshCookie: []
+          CsrfCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      responses:
+        "204":
+          description: Empty response after applicable transaction; all three exact cookies are cleared.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { $ref: "#/components/headers/SetCookie" }
+        "400": { description: A decoded non-empty body is forbidden., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "401": { description: Credential headers conflict with the endpoint contract., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "403": { description: Same-origin or CSRF proof failed for a presented refresh cookie., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "413": { description: Transport body exceeds 1024 bytes., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
+        "503": { description: PostgreSQL or audit dependency unavailable; server revocation is not claimed., content: { application/json: { schema: { $ref: "#/components/schemas/AuthSessionError" } } } }
   /api/tenants/register:
     post:
-      summary: Register tenant
+      operationId: registerTenant
+      summary: Register a tenant and issue its first analyst automation credential once
+      description: Disabled by default. Successful credentials cannot be replayed or recovered by this public route.
+      security: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: "^[!-~]+$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TenantRegistrationRequest" }
       responses:
-        "200":
-          description: TODO define response schema
+        "201":
+          description: Tenant created; the plaintext apiKey is returned on this response only.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantRegistrationCreated" }
+        "400":
+          description: Strict request, media, JSON, header, or normalization validation failed.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "404":
+          description: Self-registration is disabled and the resource behaves as absent.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "409":
+          description: Idempotency request is in progress, non-replayable, reused, or terminal.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+              description: Present only for IDEMPOTENCY_IN_PROGRESS and always 1.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "413":
+          description: JSON request exceeds 16384 bytes.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "429":
+          description: Five attempts were already admitted for the canonical client IP in the rolling 60-second window.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
+        "503":
+          description: The required PostgreSQL or shared limiter dependency is unavailable.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistrationError" }
   /tenants/me:
     get:
-      summary: Current tenant profile
+      operationId: getCurrentTenantProfile
+      summary: Current tenant metadata profile
+      description: Returns only the active tenant resolved by database-confirmed authentication context. Caller-supplied tenant identifiers are ignored.
+      x-required-action: tenant_profile.read
+      security:
+        - JwtBearer: []
+        - AnalystApiKey: []
+        - AccessCookie: []
       responses:
         "200":
-          description: TODO define response schema
+          description: Canonical metadata for the authenticated active tenant.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfile" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, stale, or otherwise invalid.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "403":
+          description: The authenticated actor lacks tenant_profile.read or its database-confirmed tenant/user is inactive.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "404":
+          description: The authenticated active tenant profile vanished before projection.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
+        "503":
+          description: Authentication or tenant-profile PostgreSQL access is temporarily unavailable.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantProfileError" }
   /api/users:
     get:
-      summary: List users
+      operationId: listTenantUsers
+      summary: List user identity and authorization metadata
+      description: Immutable created_at DESC and id DESC keyset pagination. The default is 25 and maximum is 100. A Tenant Admin JWT may make 60 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 512 }
+          description: Strict versioned opaque continuation boundary.
       responses:
         "200":
-          description: TODO define response schema
-  /api/users:
+          description: Exact seven-field metadata in immutable keyset order.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserListResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical limit, cursor, or unknown query member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Sixty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
     post:
-      summary: Create user
+      operationId: createTenantUser
+      summary: Create user identity and authorization metadata
+      description: Creates no credential, session, invitation, or access token. A Tenant Admin user credential may make 30 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreateRequest" }
       responses:
-        "200":
-          description: TODO define response schema
+        "201":
+          description: User identity and authorization metadata created.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUser" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical or open request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "409":
+          description: USER_CONFLICT for a normalized email conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Thirty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
   /api/users/{id}:
     patch:
-      summary: Update user
+      operationId: updateTenantUser
+      summary: Update user identity and authorization metadata
+      description: Requires the exact returned updated_at and at least one mutable field. The owning tenant is locked before the target row; no admitted transition may leave zero active tenant administrators. A Tenant Admin user credential may make 30 admitted requests in one rolling 60-second window.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserPatchRequest" }
       responses:
         "200":
-          description: TODO define response schema
+          description: Exact metadata after the database-managed version advances.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TenantUser" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical path, version, or open request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "404":
+          description: USER_NOT_FOUND for both absent and cross-scope identifiers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "409":
+          description: USER_VERSION_CONFLICT, USER_CONFLICT, or LAST_TENANT_ADMIN_REQUIRED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Thirty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+  /api/users/{id}/credentials/password:
+    put:
+      operationId: provisionTenantUserPassword
+      summary: Provision or reset one tenant user's password credential
+      description: A database-confirmed Tenant Admin user credential may make five admitted requests per target in one rolling 60-second window. Hashing completes before the transaction; tenant, target, credential, target refresh-family revocation, and one secret-free transition audit commit atomically. User metadata and session credentials are never returned.
+      x-required-action: users.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserPasswordRequest" }
+      responses:
+        "204":
+          description: Credential provision or reset committed with no response body.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "400":
+          description: VALIDATION_ERROR for wrong media, an open body, or invalid password shape.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "404":
+          description: Identical NOT_FOUND for absent and cross-tenant targets.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "413":
+          description: PAYLOAD_TOO_LARGE when the encoded request exceeds 2048 bytes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "429":
+          description: Five requests were already admitted for this tenant, actor, target, and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+        "503":
+          description: Argon queue/worker, authentication, PostgreSQL, audit, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserError" }
+  /api/api-keys:
+    get:
+      operationId: listTenantApiKeys
+      summary: List safe stored API-key metadata
+      description: Immutable created_at DESC and id DESC keyset pagination over the authenticated tenant only. The default is 25 and maximum is 100. A Tenant Admin JWT may make 60 admitted requests in one rolling 60-second window.
+      x-required-action: api_keys.read_manage
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 512 }
+          description: Strict versioned opaque continuation boundary over exact microsecond timestamp and UUID values.
+      responses:
+        "200":
+          description: Exact four-field stored metadata with no tenant or credential material.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataListResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical limit, cursor, filter, or unknown query member.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "403":
+          description: API-key actors and non-admin JWT roles are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "429":
+          description: Sixty requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
+        "503":
+          description: Authentication, PostgreSQL, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyMetadataError" }
   /api/api-keys/rotate:
     post:
-      summary: Rotate API key
+      operationId: rotateTenantApiKey
+      summary: Atomically revoke one selected API key and issue its replacement
+      description: A database-confirmed Tenant Admin user credential may submit five authorized, schema-valid requests per rolling 60 seconds. The selected same-tenant active row is locked, revoked, replaced, and audited in one transaction. The plaintext is serialized once only after commit; retrying an already committed old selection returns the same non-enumerating 404 and writes nothing.
+      x-required-action: api_keys.read_rotate
+      security:
+        - JwtBearer: []
+        - AccessCookie: []
+      parameters:
+        - name: Origin
+          in: header
+          required: false
+          description: Required and exact when AccessCookie is selected.
+          schema: { type: string, format: uri }
+        - name: Sec-Fetch-Site
+          in: header
+          required: false
+          description: When present with AccessCookie, must be same-origin.
+          schema: { type: string, const: same-origin }
+        - name: X-CSRF-Token
+          in: header
+          required: false
+          description: Required canonical double-submit proof when AccessCookie is selected.
+          schema: { type: string, minLength: 43, maxLength: 43, writeOnly: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApiKeyRotationRequest" }
       responses:
         "200":
-          description: TODO define response schema
+          description: Exact old/replacement metadata, durable audit row identifier, and one-time plaintext after commit.
+          headers:
+            X-Request-ID: { $ref: "#/components/headers/RequestId" }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationResponse" }
+        "400":
+          description: VALIDATION_ERROR for a noncanonical selected key, invalid note, or open body.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "401":
+          description: Authentication is missing, conflicting, malformed, or stale. Dual credentials return AUTH_CREDENTIAL_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "403":
+          description: API-key actors, non-admin JWT roles, and inactive actors are forbidden.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "404":
+          description: Identical NOT_FOUND for missing, revoked, cross-tenant, or concurrent-loser selections.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "413":
+          description: PAYLOAD_TOO_LARGE when the request exceeds 16384 bytes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "429":
+          description: Five requests were already admitted for this actor and route in the rolling 60-second window.
+          headers:
+            Retry-After: { $ref: "#/components/headers/RetryAfter" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
+        "503":
+          description: Authentication, credential generation, PostgreSQL, audit, or required shared limiter dependency is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyRotationError" }
   /api/cloud-accounts:
     post:
-      summary: Create cloud account
+      operationId: createCloudAccount
+      summary: Create a tenant-scoped cloud account
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: cloudAccountSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/cloud-accounts:
+        "201": { description: Created cloud account., content: { application/json: { schema: { $ref: "#/components/schemas/CloudAccount" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     get:
-      summary: List cloud accounts
+      operationId: listCloudAccounts
+      summary: List tenant-scoped cloud accounts
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [ { $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: provider, in: query, schema: { type: string } }, { name: is_active, in: query, schema: { type: string, enum: [true, false] } } ]
+      x-runtime-schema: cloudAccountsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Cloud account page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/cloud-accounts/{id}:
     patch:
-      summary: Update cloud account
+      operationId: updateCloudAccount
+      summary: Update a tenant-scoped cloud account
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: cloudAccountSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Updated cloud account., content: { application/json: { schema: { $ref: "#/components/schemas/CloudAccount" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/cloud-accounts/{id}/deactivate:
     post:
-      summary: Deactivate cloud account
+      operationId: deactivateCloudAccount
+      summary: Deactivate a cloud account without deleting billing evidence
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: cloudAccountSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Deactivated cloud account., content: { application/json: { schema: { $ref: "#/components/schemas/CloudAccount" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/imports:
     post:
-      summary: Create import
+      operationId: createImport
+      summary: Parse a tenant billing object into canonical usage rows
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: importBatchSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/imports:
+        "201": { description: Completed or quarantined import batch., content: { application/json: { schema: { $ref: "#/components/schemas/ImportBatch" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     get:
-      summary: List imports
+      operationId: listImports
+      summary: List tenant billing imports with cursor and status filters
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: source, in: query, schema: { type: string } }, { name: format, in: query, schema: { type: string } }]
+      x-runtime-schema: importsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Import page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/imports/{id}:
     get:
-      summary: Get import
+      operationId: getImport
+      summary: Get one tenant-scoped import batch
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: importBatchSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Import batch detail., content: { application/json: { schema: { $ref: "#/components/schemas/ImportBatch" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/price-tables:
     post:
-      summary: Create price table
+      operationId: createPriceTable
+      summary: Create a validated immutable price table version
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: priceTableSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Price table version., content: { application/json: { schema: { $ref: "#/components/schemas/PriceTable" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
+    get:
+      operationId: listPriceTables
+      summary: List price table versions with provider and instrument filters
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: provider, in: query, schema: { type: string } }, { name: instrument, in: query, schema: { type: string } }, { name: status, in: query, schema: { type: string } }]
+      x-runtime-schema: priceTablesListResponseSchema
+      responses:
+        "200": { description: Price table page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/price-tables/{id}/activate:
     post:
-      summary: Activate price table
+      operationId: activatePriceTable
+      summary: Activate a price table version
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, maxProperties: 0 } } } }
+      x-runtime-schema: priceTableSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/price-tables:
-    get:
-      summary: List price tables
-      responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Activated price table version., content: { application/json: { schema: { $ref: "#/components/schemas/PriceTable" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/forecast-models:
     get:
+      operationId: listForecastModels
       summary: List forecast models
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: method, in: query, schema: { type: string, const: seasonal_naive } }]
+      x-runtime-schema: forecastModelsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/forecast-models:
+        "200": { description: Forecast model page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     post:
-      summary: Create forecast model
+      operationId: createForecastModel
+      summary: Create a seasonal-naive forecast model
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: forecastModelSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Forecast model., content: { application/json: { schema: { $ref: "#/components/schemas/ForecastModel" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/forecast-runs:
     get:
+      operationId: listForecastRuns
       summary: List forecast runs
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: forecast_model_id, in: query, schema: { type: string, format: uuid } }]
+      x-runtime-schema: forecastRunsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/forecast-runs:
+        "200": { description: Forecast run page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     post:
-      summary: Create forecast run
+      operationId: createForecastRun
+      summary: Queue a deterministic forecast run
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: forecastRunSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Queued forecast run., content: { application/json: { schema: { $ref: "#/components/schemas/ForecastRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/forecast-runs/{id}:
     get:
-      summary: Get forecast run
+      operationId: getForecastRun
+      summary: Get one forecast run
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: forecastRunSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Forecast run detail., content: { application/json: { schema: { $ref: "#/components/schemas/ForecastRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/scenarios:
     get:
-      summary: List scenarios
+      operationId: listScenarios
+      summary: List tenant scenario shocks
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }]
+      x-runtime-schema: scenariosListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/scenarios:
+        "200": { description: Scenario page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     post:
-      summary: Create scenario
+      operationId: createScenario
+      summary: Create a scenario shock configuration
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: scenarioSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Scenario., content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/scenarios/{id}:
     get:
-      summary: Get scenario
+      operationId: getScenario
+      summary: Get one scenario shock configuration
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: scenarioSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Scenario detail., content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/optimizer-policies:
     get:
+      operationId: listOptimizerPolicies
       summary: List optimizer policies
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }]
+      x-runtime-schema: optimizerPoliciesListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/optimizer-policies:
+        "200": { description: Optimizer policy page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     post:
-      summary: Create optimizer policy
+      operationId: createOptimizerPolicy
+      summary: Create an optimizer risk policy
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: optimizerPolicySchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Optimizer policy., content: { application/json: { schema: { $ref: "#/components/schemas/OptimizerPolicy" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/optimizer-policies/{id}:
     patch:
-      summary: Update optimizer policy
+      operationId: updateOptimizerPolicy
+      summary: Update an optimizer policy with an optimistic concurrency boundary
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: optimizerPolicySchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Updated optimizer policy., content: { application/json: { schema: { $ref: "#/components/schemas/OptimizerPolicy" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/optimizer-runs:
     post:
-      summary: Create optimizer run
+      operationId: createOptimizerRun
+      summary: Freeze inputs and queue a commitment portfolio optimization
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: optimizerRunSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Queued optimizer run., content: { application/json: { schema: { $ref: "#/components/schemas/OptimizerRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/optimizer-runs/{id}:
     get:
-      summary: Get optimizer run
+      operationId: getOptimizerRun
+      summary: Get an optimizer run and sanitized frontier summary
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: optimizerRunDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Optimizer run detail., content: { application/json: { schema: { $ref: "#/components/schemas/OptimizerRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/recommendations:
     get:
-      summary: List recommendations
+      operationId: listRecommendations
+      summary: List ranked tenant recommendations
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: risk_band, in: query, schema: { type: string } }, { name: provider, in: query, schema: { type: string } }, { name: instrument, in: query, schema: { type: string } }]
+      x-runtime-schema: recommendationsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Recommendation page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/recommendations/{id}:
     get:
-      summary: Get recommendation
+      operationId: getRecommendation
+      summary: Get a recommendation and report summary
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: recommendationDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Recommendation detail., content: { application/json: { schema: { $ref: "#/components/schemas/RecommendationDetail" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/recommendations/{id}/request-approval:
     post:
-      summary: Request approval
+      operationId: requestRecommendationApproval
+      summary: Create a frozen approval packet for a recommendation
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: approvalSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Pending approval packet., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/approvals:
     get:
-      summary: List approvals
+      operationId: listApprovals
+      summary: List tenant approval packets
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: assigned_to_user_id, in: query, schema: { type: string, format: uuid } }, { name: recommendation_id, in: query, schema: { type: string, format: uuid } }]
+      x-runtime-schema: approvalsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Approval page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/approvals/{id}:
     get:
-      summary: Get approval
+      operationId: getApproval
+      summary: Get a frozen approval packet
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: approvalDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Approval detail., content: { application/json: { schema: { $ref: "#/components/schemas/ApprovalDetail" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/approvals/{id}/approve:
     post:
-      summary: Approve recommendation
+      operationId: approveRecommendation
+      summary: Approve a pending recommendation
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: approvalDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Approved recommendation detail., content: { application/json: { schema: { $ref: "#/components/schemas/ApprovalDetail" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/approvals/{id}/reject:
     post:
-      summary: Reject recommendation
+      operationId: rejectRecommendation
+      summary: Reject a pending recommendation
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: approvalDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Rejected recommendation detail., content: { application/json: { schema: { $ref: "#/components/schemas/ApprovalDetail" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/backtests:
     get:
-      summary: List backtests
+      operationId: listBacktests
+      summary: List deterministic replay runs
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { name: status, in: query, schema: { type: string } }, { name: baseline, in: query, schema: { type: string } }, { name: policy_id, in: query, schema: { type: string, format: uuid } }]
+      x-runtime-schema: backtestsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/backtests:
+        "200": { description: Backtest page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     post:
-      summary: Create backtest
+      operationId: createBacktest
+      summary: Queue a no-future-leakage replay
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: backtestRunSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Queued backtest., content: { application/json: { schema: { $ref: "#/components/schemas/BacktestRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/backtests/{id}:
     get:
-      summary: Get backtest
+      operationId: getBacktest
+      summary: Get replay metrics and monthly evidence
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: backtestDetailSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Backtest detail., content: { application/json: { schema: { $ref: "#/components/schemas/BacktestRun" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/reports/{source_type}/{source_id}:
     get:
-      summary: Get report
+      operationId: getReport
+      summary: Get a tenant-scoped immutable report snapshot
+      security: [{ JwtBearer: [] }, { AnalystApiKey: [] }]
+      parameters: [{ name: source_type, in: path, required: true, schema: { type: string } }, { name: source_id, in: path, required: true, schema: { type: string, format: uuid } }]
+      x-runtime-schema: reportResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Report snapshot., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/audit-log:
     get:
-      summary: List audit log
+      operationId: listAuditLog
+      summary: List append-only tenant audit evidence
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: action, in: query, schema: { type: string } }, { name: actor_type, in: query, schema: { type: string } }, { name: entity_type, in: query, schema: { type: string } }, { name: entity_id, in: query, schema: { type: string, format: uuid } }]
+      x-runtime-schema: auditLogListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Audit page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/integrations/status:
     get:
-      summary: Integration status
+      operationId: getIntegrationStatus
+      summary: Report optional adapter configuration without secrets
+      security: [{ JwtBearer: [] }]
+      x-runtime-schema: integrationsStatusResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Adapter status list., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/notifications:
     get:
-      summary: List notifications
+      operationId: listNotifications
+      summary: List user notifications with unread count
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }, { name: status, in: query, schema: { type: string } }, { name: event_type, in: query, schema: { type: string } }]
+      x-runtime-schema: notificationsListResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Notification page., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/notifications/{id}/read:
     post:
-      summary: Mark notification read
+      operationId: markNotificationRead
+      summary: Mark a notification read for the current user
+      security: [{ JwtBearer: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      x-runtime-schema: notificationSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Read notification., content: { application/json: { schema: { $ref: "#/components/schemas/Notification" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/settings/notifications:
     get:
-      summary: Get notification settings
+      operationId: getNotificationSettings
+      summary: Get current-user notification preferences
+      security: [{ JwtBearer: [] }]
+      x-runtime-schema: notificationPreferencesResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
-  /api/settings/notifications:
+        "200": { description: Notification preferences., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
     put:
-      summary: Update notification settings
+      operationId: updateNotificationSettings
+      summary: Replace current-user notification preferences
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: notificationPreferencesResponseSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Updated notification preferences., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /api/integrations/test-event:
     post:
-      summary: Send integration test event
+      operationId: sendIntegrationTestEvent
+      summary: Enqueue a safe optional-adapter test event
+      security: [{ JwtBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/JsonBody" } } } }
+      x-runtime-schema: ecosystemEventSchema
       responses:
-        "200":
-          description: TODO define response schema
+        "201": { description: Enqueued or disabled adapter event., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "400": { $ref: "#/components/responses/Error400" }
+        "401": { $ref: "#/components/responses/Error401" }
+        "403": { $ref: "#/components/responses/Error403" }
+        "404": { $ref: "#/components/responses/Error404" }
+        "409": { $ref: "#/components/responses/Error409" }
+        "413": { $ref: "#/components/responses/Error413" }
+        "429": { $ref: "#/components/responses/Error429" }
+        "503": { $ref: "#/components/responses/Error503" }
   /health:
     get:
-      summary: Process health
+      operationId: getLiveness
+      summary: Process liveness
+      security: []
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Process is alive., content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, const: ok } } } } } }
   /health/db:
     get:
-      summary: Database health
+      operationId: getDatabaseHealth
+      summary: Bounded database health probe
+      security: []
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Database is reachable., content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, const: ok } } } } } }
+        "503": { description: Database is unavailable., content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, const: unavailable } } } } } }
   /health/ready:
     get:
-      summary: Readiness health
+      operationId: getReadiness
+      summary: Bounded database and object-store readiness probe
+      security: []
       responses:
-        "200":
-          description: TODO define response schema
+        "200": { description: Required local dependencies are ready., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }
+        "503": { description: A required local dependency is unavailable., content: { application/json: { schema: { $ref: "#/components/schemas/JsonObject" } } } }

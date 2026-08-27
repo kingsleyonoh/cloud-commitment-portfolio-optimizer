@@ -1,0 +1,2 @@
+provider,service_code,sku,region,usage_start,usage_end,usage_quantity,usage_unit,on_demand_cost_cents,commitment_applied_cents,tags
+aws,AmazonEC2,m7g.large,us-east-1,2026-01-01T00:00:00Z,2026-01-01T01:00:00Z,1.25000000,Hrs,24,12,"{""environment"":""synthetic""}"

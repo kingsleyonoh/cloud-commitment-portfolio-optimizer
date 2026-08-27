@@ -1,10 +1,10 @@
 # Project-Local Checks (catalog)
 
-> **One file per check.** Each check is a project-local enforcement rule written by `yolo-subagent-reinforce` after a recurring failure pattern was detected (default: 3 occurrences of the same `failure_type::signature`). The implement sub-agent reads matching checks at Step 4 (Plan) and **rejects the plan** if it triggers one — preventing the recurrence at plan time, not test time.
+> **One file per check.** Each check is project-local guidance written or reviewed by ordinary AI/Mesh workflows after path-backed evidence shows a recurring failure pattern. Implementation planning reads matching checks and rejects or revises a plan that would repeat the pattern.
 >
-> Checks are project-local by design. Stack-class candidates get queued in `.yolo/harvest-candidates.md` for `/harvest-gotchas` review and possible promotion to template knowledge.
+> Checks are project-local by design. Stack-class candidates may be queued in `.yolo/harvest-candidates.md` for `/harvest-gotchas` review and possible promotion to template knowledge.
 >
-> Checks are retire-able via `/audit-reinforcements` when their target pattern no longer exists in the codebase. Unlike `yolo-honesty-checks.md` (template-class, only humans edit), checks here have a lifecycle tied to the project's evolution.
+> Checks are retire-able via `/audit-reinforcements` when their target pattern no longer exists in the codebase. They are advisory project governance, not Runtime v2 acceptance authority or per-file capability rules.
 >
 > Filename convention: `{failure_type}-{slug}.md` (lowercase, hyphenated). Example: `tests-wont-green-mock-database-in-integration.md`.
 
@@ -14,4 +14,4 @@
 |----------|--------------|------|------------------------|---------------------|-------------|--------|
 | EXAMPLE.md | (template) | (template) | (template) | — | — | template — delete me |
 
-> Add one row per check file. `yolo-subagent-reinforce` writes both the file and the row when it lands a new check. `/audit-reinforcements` updates `Last fired` and `Times fired` from `.yolo/failure-patterns.json`, and proposes retirement (which removes the row + deletes the file) when the pattern is dead.
+> Add one row per check file. The evidence-backed AI/Mesh workflow that lands a check updates both the file and this row. `/audit-reinforcements` may update firing evidence and propose retirement when the pattern is dead.

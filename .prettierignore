@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.data/
+.pi/
+.tmp/
+playwright-report/
+test-results/
+.env*
+*.md
+*.yaml
+*.yml

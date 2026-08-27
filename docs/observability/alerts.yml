@@ -1,0 +1,22 @@
+version: 1
+alerts:
+  - name: ccpo-readiness-unavailable
+    signal: http.health.ready
+    condition: status == "unavailable"
+    for: 5m
+    severity: critical
+  - name: ccpo-queue-lag-high
+    signal: queue.lag.lag_seconds
+    condition: value > 120
+    for: 5m
+    severity: warning
+  - name: ccpo-worker-cycle-failures
+    signal: worker.cycle.failed
+    condition: count >= 3
+    for: 5m
+    severity: warning
+  - name: ccpo-http-errors
+    signal: http.request.failed
+    condition: rate_5m > 0.01
+    for: 5m
+    severity: warning

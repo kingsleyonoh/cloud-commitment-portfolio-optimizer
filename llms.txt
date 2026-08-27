@@ -19,7 +19,7 @@ CFOs, CTOs, Heads of FinOps, FinOps analysts, finance approvers, and read-only a
 
 ## API Surface
 
-OpenAPI stubs live in `openapi.yaml`. Major groups: tenants/users/API keys, cloud accounts, imports, price tables, forecasts, scenarios, optimizer policies/runs, recommendations, approvals, backtests, reports, audit log, integrations, notifications, settings, health.
+OpenAPI lives in `openapi.yaml`. The implemented auth surface preserves API-key and bearer contracts while adding local-password `/api/auth/login`, RS256 access cookies, stable-family opaque refresh rotation/reuse revocation, logout, same-origin session CSRF, shared Redis abuse controls, and secret-free transition audits. Session JSON is metadata-only; `/login` HTML remains deferred. The Tenant Admin JWT-only API-key surface includes metadata listing and atomic selected-key rotation with one-time post-commit plaintext, durable secret-free audit, identical non-enumerating misses, and no credential replay. Major groups: tenants/users/API keys, cloud accounts, imports, price tables, forecasts, scenarios, optimizer policies/runs, recommendations, approvals, backtests, reports, audit log, integrations, notifications, settings, health.
 
 ## Install and Run
 

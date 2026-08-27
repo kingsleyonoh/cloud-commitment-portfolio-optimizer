@@ -18,7 +18,7 @@
 ### E2E Test Architecture
 
 **Backend E2E (API projects):**
-1. Start the actual server: `npm run dev` or equivalent (NOT a test-mode in-process server)
+1. Start the actual server with the available command from `CODEBASE_CONTEXT.md` (NOT a test-mode in-process server). For this project, `npm run dev` is Phase 1-owned/planned and must not be invoked until its script and reachable app entrypoint exist.
 2. Wait for ready signal (health check passes)
 3. Hit real endpoints via HTTP (fetch, axios, or curl)
 4. Assert on status codes, response bodies, headers
@@ -53,7 +53,7 @@ tests/e2e/
 | Speed | Fast (~1ms per test) | Slower (~100ms+ per test) |
 | What it catches | Handler logic, validation, DB | Middleware ordering, CORS, startup, ports |
 | When to use | Every endpoint (RED/GREEN phase) | After REGRESSION passes (Step 7d) |
-| Run command | `npm run test && zig build test && npm run test:integration && npm run test:e2e` | `npm run test:e2e` |
+| Run command | `npm run test:integration` | `npm run test:e2e` |
 
 **Both are required.** Integration tests are your fast feedback loop (TDD). E2E tests are your deployment confidence check.
 
@@ -83,7 +83,7 @@ E2E tests should run in an environment whose behavior-shaping characteristics ma
 - Dockerized projects can reuse the production `Dockerfile` for the test container (`docker compose -f docker-compose.test.yml up`).
 - Non-Dockerized projects can install the same system-package set via a `scripts/setup-test-env.*` script that mirrors the production deploy script.
 - Cloud-only projects can run E2E against a dedicated staging tenant of the same hosting platform.
-- The TEMPLATE does NOT mandate any specific implementation — it mandates the parity outcome. `.agent/knowledge/checks/` is where project-specific implementation rules live (e.g. `test-env-uses-prod-dockerfile.md` written by `yolo-subagent-reinforce` after a "works locally, fails in deploy" recurrence).
+- The TEMPLATE does NOT mandate any specific implementation — it mandates the parity outcome. `.agent/knowledge/checks/` is where project-specific implementation rules live (for example, `test-env-uses-prod-dockerfile.md`, written or reviewed by ordinary AI/Mesh workflows after evidence-backed recurrence).
 
 ### Bootstrap Setup for E2E
 During `/bootstrap` Phase 0, a `[SETUP]` item should configure the E2E framework:
@@ -94,9 +94,9 @@ During `/bootstrap` Phase 0, a `[SETUP]` item should configure the E2E framework
 - Verify the E2E command runs and exits cleanly (even with 0 tests)
 
 ### Honesty Check for E2E Skips
-**E2E skip reasons are a high-fabrication surface** — sub-agents have historically tried to claim "E2E covered by integration tests" or "E2E deferred" to shortcut the running-server requirement. The canonical list of rejected skip patterns lives in `.agent/agents/yolo/yolo-honesty-checks.md` Section 2. When running a batch that touches endpoints, the ONLY valid skip reasons are:
-- `SKIPPED_NO_ENDPOINTS` — the batch genuinely touched no endpoints (verify against `## Items Completed`)
+**E2E skip reasons are a high-fabrication surface.** AI/Mesh reviewers must verify the changed surface and reject "covered by integration tests" or "deferred" as substitutes for required real-HTTP/browser proof. The only valid skip reasons are:
+- `SKIPPED_NO_ENDPOINTS` — the change genuinely touched no endpoints
 - `SKIPPED_NO_SERVER` — the project has no server (pure library / CLI / static site)
-- `E2E_NOT_CONFIGURED` — framework not installed yet; warning logged, not blocking
+- `E2E_NOT_CONFIGURED` — framework not installed yet; warning logged, not a passing E2E claim
 
-Any other skip reason (including "infrastructure required", "covered by integration tests", or `DEFERRED`) is rejected by YOLO master's Phase 3.2b as `E2E_DISHONEST_SKIP`.
+Any other skip reason, including "infrastructure required", "covered by integration tests", or `DEFERRED`, is an evidence gap. Runtime v2 does not interpret or accept the skip; the responsible AI/user does.
